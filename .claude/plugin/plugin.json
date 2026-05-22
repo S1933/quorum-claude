@@ -1,0 +1,10 @@
+{
+  "name": "quorum",
+  "version": "0.1.0",
+  "description": "Multi-model consensus reviewer pipelines for Claude Code",
+  "commands": [
+    "commands/quorum-review.md",
+    "commands/quorum-agent.md",
+    "commands/quorum-config.md"
+  ]
+}

@@ -1,0 +1,73 @@
+import type { WorkspaceInfo } from '../core/task.ts';
+import { ProviderRuntimeError } from '../core/errors.ts';
+
+export interface WorkspaceProbeOptions {
+  root: string;
+  baseRef?: string;
+}
+
+export async function probeWorkspace(opts: WorkspaceProbeOptions): Promise<WorkspaceInfo> {
+  const { root } = opts;
+  const baseRef = opts.baseRef ?? (await defaultBaseRef(root));
+  const diff = await gitDiff(root, baseRef);
+  const files = parseDiffFiles(diff);
+  const ws: WorkspaceInfo = { root, files };
+  if (baseRef) ws.baseRef = baseRef;
+  if (diff) ws.diff = diff;
+  return ws;
+}
+
+async function defaultBaseRef(root: string): Promise<string | undefined> {
+  for (const candidate of ['origin/main', 'origin/master', 'main', 'master']) {
+    if (await refExists(root, candidate)) return candidate;
+  }
+  return undefined;
+}
+
+async function refExists(root: string, ref: string): Promise<boolean> {
+  const proc = Bun.spawn({
+    cmd: ['git', 'rev-parse', '--verify', '--quiet', ref],
+    cwd: root,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const code = await proc.exited;
+  return code === 0;
+}
+
+async function gitDiff(root: string, baseRef: string | undefined): Promise<string | undefined> {
+  const args = baseRef ? ['diff', `${baseRef}...HEAD`] : ['diff'];
+  const proc = Bun.spawn({
+    cmd: ['git', ...args],
+    cwd: root,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (code !== 0) return undefined;
+  return out.trim() ? out : undefined;
+}
+
+function parseDiffFiles(diff: string | undefined): string[] {
+  if (!diff) return [];
+  const files = new Set<string>();
+  for (const line of diff.split('\n')) {
+    const m = /^\+\+\+ b\/(.+)$/.exec(line);
+    if (m) files.add(m[1]!);
+  }
+  return [...files];
+}
+
+export async function inferRepoRoot(start: string = process.cwd()): Promise<string> {
+  const proc = Bun.spawn({
+    cmd: ['git', 'rev-parse', '--show-toplevel'],
+    cwd: start,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (code !== 0) {
+    throw new ProviderRuntimeError('workspace', `Not inside a git repository (cwd=${start})`);
+  }
+  return out.trim();
+}

@@ -1,0 +1,58 @@
+version: 1
+
+defaults:
+  provider: openrouter-claude
+  pipeline: default
+
+providers:
+  openrouter-claude:
+    type: openrouter
+    api_key: env:OPENROUTER_API_KEY
+    model: anthropic/claude-opus-4
+    temperature: 0.2
+
+  openrouter-gpt:
+    type: openrouter
+    api_key: env:OPENROUTER_API_KEY
+    model: openai/gpt-5-codex
+    temperature: 0.2
+
+  claude-code-local:
+    type: claude-code
+    model: claude-opus-4-7
+
+personas:
+  security:
+    description: Adversarial security review
+    system: |
+      You are an adversarial security reviewer. Focus on injection,
+      authn/authz, secret handling, and unsafe deserialization. Be specific.
+
+  performance:
+    description: Latency and resource cost review
+    system: |
+      You are a performance reviewer. Flag N+1 queries, sync I/O on hot paths,
+      unbounded loops, memory leaks. Cite line numbers.
+
+  architecture:
+    description: Maintainability and design review
+    system: |
+      You are a principal engineer. Focus on layering violations, leaky
+      abstractions, and testability. Prefer fewer, deeper findings.
+
+reviewers:
+  sec-opus:  { persona: security,     provider: openrouter-claude }
+  sec-gpt:   { persona: security,     provider: openrouter-gpt }
+  perf-opus: { persona: performance,  provider: openrouter-claude }
+  arch-opus: { persona: architecture, provider: openrouter-claude }
+
+pipelines:
+  default:
+    parallel: true
+    reviewers: [sec-opus, perf-opus, arch-opus]
+    consensus: { strategy: overlap-v1 }
+
+  consensus-security:
+    parallel: true
+    reviewers: [sec-opus, sec-gpt]
+    consensus: { strategy: overlap-v1, requireAgreement: 2 }

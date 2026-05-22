@@ -1,0 +1,26 @@
+{
+  "name": "quorum",
+  "version": "0.1.0",
+  "description": "Provider-agnostic orchestration runtime for AI coding agents and multi-model consensus review",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "quorum": "src/cli/index.ts"
+  },
+  "scripts": {
+    "quorum": "bun run src/cli/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
