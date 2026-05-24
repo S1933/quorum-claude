@@ -22,10 +22,13 @@ interface RawFinding {
   file?: unknown;
   lineStart?: unknown;
   lineEnd?: unknown;
+  line_start?: unknown;
+  line_end?: unknown;
   severity?: unknown;
   category?: unknown;
   title?: unknown;
   body?: unknown;
+  recommendation?: unknown;
 }
 
 export function parseFindings(raw: string, reviewerId: string): Finding[] {
@@ -75,14 +78,14 @@ function normaliseFinding(item: RawFinding, reviewerId: string): Finding | null 
   const file = typeof item.file === 'string' ? item.file : null;
   if (!file) return null;
 
-  const lineStart = toInt(item.lineStart) ?? 1;
-  const lineEndRaw = toInt(item.lineEnd);
+  const lineStart = toInt(item.lineStart ?? item.line_start) ?? 1;
+  const lineEndRaw = toInt(item.lineEnd ?? item.line_end);
   const lineEnd = lineEndRaw ?? lineStart;
 
   const severity = normaliseSeverity(item.severity);
   const category = normaliseCategory(item.category);
   const title = typeof item.title === 'string' ? item.title.trim() : '';
-  const body = typeof item.body === 'string' ? item.body.trim() : '';
+  const body = normaliseBody(item.body, item.recommendation);
   if (!title) return null;
 
   return {
@@ -94,6 +97,13 @@ function normaliseFinding(item: RawFinding, reviewerId: string): Finding | null 
     body,
     reviewer: reviewerId,
   };
+}
+
+function normaliseBody(body: unknown, recommendation: unknown): string {
+  const parts = [body, recommendation]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim());
+  return [...new Set(parts)].join('\n\n');
 }
 
 function toInt(v: unknown): number | null {

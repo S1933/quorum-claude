@@ -65,6 +65,34 @@ describe('probeWorkspace', () => {
 
     expect(workspace.files).toEqual(['deleted.txt', 'new-name.txt']);
   });
+
+  test('includes text untracked files in the review diff', async () => {
+    const repo = await makeRepo('main');
+    await writeFile(join(repo, 'tracked.txt'), 'hello\n');
+    await git(repo, ['add', 'tracked.txt']);
+    await git(repo, ['commit', '-m', 'initial']);
+    await writeFile(join(repo, 'new-file.ts'), 'export const value = 1;\n');
+
+    const workspace = await probeWorkspace({ root: repo });
+
+    expect(workspace.diff).toContain('diff --git a/new-file.ts b/new-file.ts');
+    expect(workspace.diff).toContain('+export const value = 1;');
+    expect(workspace.files).toEqual(['new-file.ts']);
+  });
+
+  test('lists binary untracked files without inlining their bytes', async () => {
+    const repo = await makeRepo('main');
+    await writeFile(join(repo, 'tracked.txt'), 'hello\n');
+    await git(repo, ['add', 'tracked.txt']);
+    await git(repo, ['commit', '-m', 'initial']);
+    await writeFile(join(repo, 'image.bin'), new Uint8Array([0, 1, 2, 3]));
+
+    const workspace = await probeWorkspace({ root: repo });
+
+    expect(workspace.diff).toContain('diff --git a/image.bin b/image.bin');
+    expect(workspace.diff).toContain('+(skipped: binary file)');
+    expect(workspace.files).toEqual(['image.bin']);
+  });
 });
 
 async function makeRepo(branch: string): Promise<string> {

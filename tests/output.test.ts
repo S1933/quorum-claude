@@ -77,4 +77,31 @@ describe('parseFindings', () => {
     expect(finding?.severity).toBe('medium');
     expect(finding?.category).toBe('correctness');
   });
+
+  test('accepts snake_case line fields and appends recommendations', () => {
+    const [finding] = parseFindings(
+      JSON.stringify({
+        findings: [
+          {
+            file: 'src/app.ts',
+            line_start: 7,
+            line_end: 9,
+            severity: 'Medium',
+            category: 'Correctness',
+            title: 'Snake case finding',
+            body: 'The current code drops this variant.',
+            recommendation: 'Accept common JSON field aliases.',
+          },
+        ],
+      }),
+      'rev-a',
+    );
+
+    expect(finding).toMatchObject({
+      lineRange: { start: 7, end: 9 },
+      severity: 'medium',
+      category: 'correctness',
+      body: 'The current code drops this variant.\n\nAccept common JSON field aliases.',
+    });
+  });
 });

@@ -1,3 +1,5 @@
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { WorkspaceInfo } from '../core/task.ts';
 import { ProviderRuntimeError } from '../core/errors.ts';
 
@@ -6,14 +8,18 @@ export interface WorkspaceProbeOptions {
   baseRef?: string;
 }
 
+const MAX_UNTRACKED_BYTES = 24 * 1024;
+
 export async function probeWorkspace(opts: WorkspaceProbeOptions): Promise<WorkspaceInfo> {
   const { root } = opts;
   const baseRef = opts.baseRef ?? (await defaultBaseRef(root));
   const diff = await gitDiff(root, baseRef);
-  const files = parseDiffFiles(diff);
+  const untrackedDiff = await gitUntrackedDiff(root);
+  const combinedDiff = [diff, untrackedDiff].filter(Boolean).join('\n\n') || undefined;
+  const files = parseDiffFiles(combinedDiff);
   const ws: WorkspaceInfo = { root, files };
   if (baseRef) ws.baseRef = baseRef;
-  if (diff) ws.diff = diff;
+  if (combinedDiff) ws.diff = combinedDiff;
   return ws;
 }
 
@@ -67,6 +73,10 @@ async function getMergeBase(root: string, baseRef: string): Promise<string | und
 }
 
 async function runGitDiff(root: string, args: string[]): Promise<string | null> {
+  return runGit(root, args);
+}
+
+async function runGit(root: string, args: string[]): Promise<string | null> {
   const proc = Bun.spawn({
     cmd: ['git', ...args],
     cwd: root,
@@ -92,6 +102,47 @@ function parseDiffFiles(diff: string | undefined): string[] {
     if (added) files.add(added[1]!);
   }
   return [...files];
+}
+
+async function gitUntrackedDiff(root: string): Promise<string | undefined> {
+  const out = await runGit(root, ['ls-files', '--others', '--exclude-standard']);
+  if (out === null || !out.trim()) return undefined;
+
+  const chunks: string[] = [];
+  for (const file of out.split('\n').map((line) => line.trim()).filter(Boolean)) {
+    chunks.push(await formatUntrackedFile(root, file));
+  }
+  return chunks.length > 0 ? chunks.join('\n\n') : undefined;
+}
+
+async function formatUntrackedFile(root: string, file: string): Promise<string> {
+  const header = [`diff --git a/${file} b/${file}`, 'new file mode 100644', '--- /dev/null', `+++ b/${file}`];
+  const absolute = join(root, file);
+
+  try {
+    const info = await stat(absolute);
+    if (!info.isFile()) return [...header, `@@ -0,0 +1 @@`, `+(skipped: not a regular file)`].join('\n');
+    if (info.size > MAX_UNTRACKED_BYTES) {
+      return [...header, '@@ -0,0 +1 @@', `+(skipped: ${info.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`].join('\n');
+    }
+
+    const data = await readFile(absolute);
+    if (!isProbablyText(data)) {
+      return [...header, '@@ -0,0 +1 @@', '+(skipped: binary file)'].join('\n');
+    }
+
+    const text = data.toString('utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = text.endsWith('\n') ? text.slice(0, -1).split('\n') : text.split('\n');
+    const lineCount = text.length === 0 ? 0 : lines.length;
+    return [...header, `@@ -0,0 +1,${lineCount} @@`, ...lines.map((line) => `+${line}`)].join('\n');
+  } catch {
+    return [...header, '@@ -0,0 +1 @@', '+(skipped: unreadable file)'].join('\n');
+  }
+}
+
+function isProbablyText(data: Uint8Array): boolean {
+  if (data.length === 0) return true;
+  return !data.includes(0);
 }
 
 export async function inferRepoRoot(start: string = process.cwd()): Promise<string> {
