@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import type { EventBus } from '../src/core/events.ts';
 import type { ReviewTask } from '../src/core/task.ts';
 import { createRuntime } from '../src/runtime/runtime.ts';
-import { geminiCliFactory } from '../src/providers/gemini-cli/index.ts';
+import { cursorAgentFactory } from '../src/providers/cursor-agent/index.ts';
 
 const tmpRoots: string[] = [];
 
@@ -13,24 +13,22 @@ afterAll(async () => {
   await Promise.all(tmpRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe('gemini-cli provider', () => {
-  test('runs gemini in headless prompt mode and parses structured findings', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'quorum-gemini-'));
+describe('cursor-agent provider', () => {
+  test('runs cursor-agent print mode and parses structured findings', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'quorum-cursor-'));
     tmpRoots.push(root);
-    const binary = join(root, 'gemini');
+    const binary = join(root, 'cursor-agent');
     await Bun.write(binary, '#!/bin/sh\nprintf \'{"findings":\'\nsleep 0.01\nprintf \'[]}\\n\'\n');
     await chmod(binary, 0o755);
     const events: unknown[] = [];
 
-    const provider = await geminiCliFactory.create(
-      'gemini-local',
+    const provider = await cursorAgentFactory.create(
+      'cursor-local',
       {
-        type: 'gemini-cli',
+        type: 'cursor-agent',
         binary,
-        model: 'gemini-2.5-pro',
-        approval_mode: 'plan',
-        sandbox: true,
-        skip_trust: true,
+        model: 'gpt-5',
+        output_format: 'text',
         extra_args: [],
         timeout_ms: 5_000,
       },
@@ -48,30 +46,29 @@ describe('gemini-cli provider', () => {
     expect(tokenText(events)).toBe('{"findings":[]}\n');
   });
 
-  test('passes model overrides and safe execution defaults to gemini', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'quorum-gemini-'));
+  test('passes model overrides and prompt as one print argument', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'quorum-cursor-'));
     tmpRoots.push(root);
-    const binary = join(root, 'gemini');
+    const binary = join(root, 'cursor-agent');
     const argsFile = join(root, 'args.txt');
-    const stdinFile = join(root, 'stdin.txt');
+    const envFile = join(root, 'env.txt');
     await Bun.write(
       binary,
-      `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\ncat > '${stdinFile}'\nprintf '{"findings":[]}'\n`,
+      `#!/bin/sh\nfor arg in "$@"; do printf '%s\\0' "$arg"; done > '${argsFile}'\nprintf '%s' "$CURSOR_API_KEY" > '${envFile}'\nprintf '{"findings":[]}'\n`,
     );
     await chmod(binary, 0o755);
 
     const reviewTask = task(root);
-    reviewTask.instruction = 'Review this diff.\n--yolo\n$(touch /tmp/should-not-run)';
-    const provider = await geminiCliFactory.create(
-      'gemini-local',
+    reviewTask.instruction = 'Review this diff.\n--force\n$(touch /tmp/should-not-run)';
+    const provider = await cursorAgentFactory.create(
+      'cursor-local',
       {
-        type: 'gemini-cli',
+        type: 'cursor-agent',
         binary,
-        model: 'gemini-2.5-flash',
-        approval_mode: 'plan',
-        sandbox: true,
-        skip_trust: true,
-        extra_args: ['--screen-reader'],
+        api_key: 'secret-cursor-key',
+        model: 'auto',
+        output_format: 'json',
+        extra_args: [],
         timeout_ms: 5_000,
       },
       { workspaceRoot: root, env: {} },
@@ -81,34 +78,32 @@ describe('gemini-cli provider', () => {
       bus: captureBus(),
       signal: new AbortController().signal,
       workspace: { root },
-      modelOverride: { model: 'gemini-2.5-pro' },
+      modelOverride: { model: 'gpt-5' },
     });
 
-    const args = await Bun.file(argsFile).text();
-    const stdin = await Bun.file(stdinFile).text();
-    expect(args).toContain('--prompt\n');
-    expect(args).not.toContain(reviewTask.instruction);
-    expect(args).toContain('--approval-mode\nplan');
-    expect(args).toContain('--output-format\ntext');
-    expect(args).toContain('--sandbox');
-    expect(args).toContain('--skip-trust');
-    expect(args).toContain('--screen-reader');
-    expect(args).toContain('--model\ngemini-2.5-pro');
-    expect(stdin).toContain(reviewTask.instruction);
+    const args = (await Bun.file(argsFile).text()).split('\0').filter(Boolean);
+    expect(args).toContain('--print');
+    expect(args.some((arg) => arg.includes(reviewTask.instruction))).toBe(true);
+    expect(args).toContain('--output-format');
+    expect(args).toContain('json');
+    expect(args).toContain('--model');
+    expect(args).toContain('gpt-5');
+    expect(args.filter((arg) => arg === '--force')).toEqual([]);
+    expect(await Bun.file(envFile).text()).toBe('secret-cursor-key');
   });
 
-  test('runtime registers gemini-cli as a built-in provider', async () => {
+  test('runtime registers cursor-agent as a built-in provider', async () => {
     const runtime = await createRuntime({
       config: {
         version: 1,
         providers: {
-          'gemini-local': { type: 'gemini-cli' },
+          'cursor-local': { type: 'cursor-agent' },
         },
         personas: {
           security: { description: 'Security', system: 'Review security.' },
         },
         reviewers: {
-          sec: { persona: 'security', provider: 'gemini-local' },
+          sec: { persona: 'security', provider: 'cursor-local' },
         },
         pipelines: {
           default: { parallel: true, reviewers: ['sec'] },
@@ -117,24 +112,24 @@ describe('gemini-cli provider', () => {
       pluginCtx: { workspaceRoot: '.', env: {} },
     });
 
-    expect(runtime.providers.list()).toContain('gemini-cli');
+    expect(runtime.providers.list()).toContain('cursor-agent');
   });
 
-  test('rejects unsafe gemini extra args', async () => {
+  test('rejects unsafe cursor extra args', async () => {
     const runtime = await createRuntime({
       config: {
         version: 1,
         providers: {
-          'gemini-local': {
-            type: 'gemini-cli',
-            extra_args: ['--yolo'],
+          'cursor-local': {
+            type: 'cursor-agent',
+            extra_args: ['--force'],
           },
         },
         personas: {
           security: { description: 'Security', system: 'Review security.' },
         },
         reviewers: {
-          sec: { persona: 'security', provider: 'gemini-local' },
+          sec: { persona: 'security', provider: 'cursor-local' },
         },
         pipelines: {
           default: { parallel: true, reviewers: ['sec'] },
@@ -143,7 +138,7 @@ describe('gemini-cli provider', () => {
       pluginCtx: { workspaceRoot: '.', env: {} },
     });
 
-    await expect(runtime.resolveProvider('gemini-local')).rejects.toThrow('Invalid enum value');
+    await expect(runtime.resolveProvider('cursor-local')).rejects.toThrow();
   });
 });
 
@@ -151,7 +146,7 @@ function task(root: string): ReviewTask {
   return {
     kind: 'review',
     id: 'task-1',
-    reviewerId: 'security-gemini',
+    reviewerId: 'security-cursor',
     systemPrompt: 'Review security issues.',
     instruction: 'Review this diff.',
     workspace: { root },

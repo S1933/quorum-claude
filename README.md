@@ -45,6 +45,7 @@ consensus report
 | 🟢 → | Claude Code | `claude-code` |
 | 🟢 → | Codex CLI | `codex-cli` |
 | 🟢 → | Continue.dev | `continue-dev` |
+| 🟢 → | Cursor Agent CLI | `cursor-agent` |
 | 🟢 → | Gemini CLI | `gemini-cli` |
 | 🟢 → | Kilo Code CLI | `kilo-code` |
 | 🟢 → | OpenCode Go | `opencode-go` |

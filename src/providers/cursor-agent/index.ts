@@ -5,17 +5,16 @@ import type { PluginCtx } from '../../runtime/plugin.ts';
 import { ProviderRuntimeError } from '../../core/errors.ts';
 import { parseFindings, REVIEW_OUTPUT_INSTRUCTIONS } from '../../reviewers/output.ts';
 import { readPreviewedStdout } from '../subprocess.ts';
-import { GeminiCliConfigSchema, type GeminiCliConfig } from './schema.ts';
+import { CursorAgentConfigSchema, type CursorAgentConfig } from './schema.ts';
 
-const PROVIDER_TYPE = 'gemini-cli';
-const STDIN_PROMPT = 'Read the review instructions from stdin and return only the requested output.';
+const PROVIDER_TYPE = 'cursor-agent';
 
-class GeminiCliProvider implements Provider {
+class CursorAgentProvider implements Provider {
   readonly kind = 'subprocess' as const;
 
   constructor(
     readonly id: string,
-    private readonly cfg: GeminiCliConfig,
+    private readonly cfg: CursorAgentConfig,
     private readonly pluginCtx: PluginCtx,
   ) {}
 
@@ -31,20 +30,15 @@ class GeminiCliProvider implements Provider {
     };
   }
 
-  private args(ctx: ExecCtx): string[] {
+  private args(prompt: string, ctx: ExecCtx): string[] {
     const model = ctx.modelOverride?.model ?? this.cfg.model;
     const args = [
-      '--prompt',
-      STDIN_PROMPT,
-      '--approval-mode',
-      this.cfg.approval_mode,
+      '--print',
+      prompt,
       '--output-format',
-      'text',
+      this.cfg.output_format,
       ...this.cfg.extra_args,
     ];
-
-    if (this.cfg.sandbox) args.push('--sandbox');
-    if (this.cfg.skip_trust) args.push('--skip-trust');
     if (model) args.push('--model', model);
     return args;
   }
@@ -52,23 +46,22 @@ class GeminiCliProvider implements Provider {
   private async runOnce(prompt: string, ctx: ExecCtx, reviewerId: string): Promise<string> {
     const cwd = this.cfg.cwd ?? this.pluginCtx.workspaceRoot;
     const proc = Bun.spawn({
-      cmd: [this.cfg.binary, ...this.args(ctx)],
+      cmd: [this.cfg.binary, ...this.args(prompt, ctx)],
       cwd,
-      stdin: 'pipe',
+      env: {
+        ...this.pluginCtx.env,
+        ...(this.cfg.api_key ? { CURSOR_API_KEY: this.cfg.api_key } : {}),
+      },
       stdout: 'pipe',
       stderr: 'pipe',
     });
 
-    const writer = proc.stdin as unknown as { write: (s: string) => void; end: () => void };
-    writer.write(prompt);
-    writer.end();
-
     const onAbort = () => proc.kill();
-    ctx.signal.addEventListener('abort', onAbort, { once: true });
     if (ctx.signal.aborted) {
-      onAbort();
+      proc.kill();
       throw new DOMException('Aborted', 'AbortError');
     }
+    ctx.signal.addEventListener('abort', onAbort, { once: true });
 
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -92,16 +85,19 @@ class GeminiCliProvider implements Provider {
       ]);
 
       if (timedOut) {
-        throw new ProviderRuntimeError(this.id, `gemini timed out after ${this.cfg.timeout_ms}ms`);
+        throw new ProviderRuntimeError(
+          this.id,
+          `cursor-agent timed out after ${this.cfg.timeout_ms}ms`,
+        );
       }
 
       if (exitCode !== 0) {
         throw new ProviderRuntimeError(
           this.id,
-          `gemini exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
+          `cursor-agent exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
         );
       }
-      return stdout.trim();
+      return normaliseCursorOutput(stdout);
     } finally {
       clearTimeout(timer);
       ctx.signal.removeEventListener('abort', onAbort);
@@ -136,10 +132,55 @@ class GeminiCliProvider implements Provider {
   }
 }
 
-export const geminiCliFactory: ProviderFactory = {
+function normaliseCursorOutput(raw: string): string {
+  const text = raw.trim();
+  if (!text) return text;
+
+  const direct = parseJson(text);
+  if (direct) return unwrapJsonOutput(direct) ?? text;
+
+  const chunks = text
+    .split('\n')
+    .map((line) => parseJson(line))
+    .filter((value): value is Record<string, unknown> => value !== null)
+    .map(unwrapJsonOutput)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  return chunks.length > 0 ? chunks.join('\n') : text;
+}
+
+function parseJson(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function unwrapJsonOutput(value: Record<string, unknown>): string | null {
+  if (Array.isArray(value.findings)) return JSON.stringify(value);
+
+  for (const key of ['output', 'response', 'text', 'content', 'result']) {
+    const candidate = value[key];
+    if (typeof candidate === 'string') return candidate;
+  }
+
+  const message = value.message;
+  if (typeof message === 'object' && message !== null) {
+    const content = (message as { content?: unknown }).content;
+    if (typeof content === 'string') return content;
+  }
+
+  return null;
+}
+
+export const cursorAgentFactory: ProviderFactory = {
   type: PROVIDER_TYPE,
-  schema: GeminiCliConfigSchema,
+  schema: CursorAgentConfigSchema,
   async create(instanceId, config, ctx) {
-    return new GeminiCliProvider(instanceId, config as GeminiCliConfig, ctx);
+    return new CursorAgentProvider(instanceId, config as CursorAgentConfig, ctx);
   },
 };

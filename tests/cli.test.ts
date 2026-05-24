@@ -12,6 +12,7 @@ import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { BoundReviewer } from '../src/reviewers/reviewer.ts';
 import { main, type CliDeps, type CliIo } from '../src/cli/index.ts';
 import { loadConfigFromPath } from '../src/config/loader.ts';
+import { createInitConfig } from '../src/config/init.ts';
 import { InMemoryEventBus } from '../src/runtime/bus.ts';
 import type { Runtime } from '../src/runtime/runtime.ts';
 
@@ -154,7 +155,7 @@ describe('cli', () => {
 
     const code = await main(
       ['init', '--config', configPath],
-      deps({}),
+      deps({ inferRepoRoot: async () => tmp }),
       io,
     );
 
@@ -197,7 +198,7 @@ describe('cli', () => {
         '--personas',
         'security,performance',
       ],
-      deps({}),
+      deps({ inferRepoRoot: async () => tmp }),
       io,
     );
 
@@ -222,13 +223,59 @@ describe('cli', () => {
 
     const code = await main(
       ['init', '--config', configPath],
-      deps({}),
+      deps({ inferRepoRoot: async () => tmp }),
       io,
     );
 
     expect(code).toBe(1);
     expect(await Bun.file(configPath).text()).toBe('existing');
     expect(io.stderrText()).toContain('Config file already exists');
+  });
+
+  test('init rejects config paths outside the repository', async () => {
+    const io = captureIo();
+    const root = await mkdtemp(join(tmpdir(), 'quorum-cli-init-root-'));
+    const outside = await mkdtemp(join(tmpdir(), 'quorum-cli-init-outside-'));
+    const configPath = join(outside, 'quorum.yaml');
+
+    const code = await main(
+      ['init', '--config', configPath],
+      deps({ inferRepoRoot: async () => root }),
+      io,
+    );
+
+    expect(code).toBe(1);
+    expect(io.stderrText()).toContain('Refusing to write config outside repository');
+    expect(await Bun.file(configPath).exists()).toBe(false);
+  });
+
+  test('init safely serializes model values as YAML data', async () => {
+    const io = captureIo();
+    const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
+    const configPath = join(tmp, 'quorum.yaml');
+
+    const code = await main(
+      [
+        'init',
+        '--config',
+        configPath,
+        '--provider',
+        'opencode-go',
+        '--model',
+        'safe-model\nreviewers:\n  injected: { persona: security, provider: opencode-local }',
+        '--personas',
+        'security',
+      ],
+      deps({ inferRepoRoot: async () => tmp }),
+      io,
+    );
+
+    expect(code).toBe(0);
+    const cfg = await loadConfigFromPath(configPath);
+    expect(Object.keys(cfg.reviewers)).toEqual(['sec-reviewer']);
+    expect(cfg.providers['opencode-local']?.model).toBe(
+      'safe-model\nreviewers:\n  injected: { persona: security, provider: opencode-local }',
+    );
   });
 });
 
@@ -267,7 +314,7 @@ function deps(overrides: Partial<CliDeps>): CliDeps {
   return {
     loadConfigFromPath: async () => config(),
     findConfigPath: () => '/repo/quorum.yaml',
-    loadInitPersonaTemplates: async () => personaTemplates(),
+    createInitConfig: (opts) => createInitConfig({ ...opts, personaTemplates: personaTemplates() }),
     inferRepoRoot: async () => '/repo',
     probeWorkspace: async () => ({ root: '/repo' }),
     createRuntime: async () => fakeRuntime(),

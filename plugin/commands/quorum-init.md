@@ -18,6 +18,7 @@ Steps:
    - `openrouter`
    - `codex-cli`
    - `continue-dev`
+   - `cursor-agent`
    - `gemini-cli`
    - `kilo-code`
    - `opencode-go`

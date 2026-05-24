@@ -11,6 +11,7 @@ import { openRouterFactory } from '../providers/openrouter/index.ts';
 import { claudeCodeFactory } from '../providers/claude-code/index.ts';
 import { codexCliFactory } from '../providers/codex-cli/index.ts';
 import { continueDevFactory } from '../providers/continue-dev/index.ts';
+import { cursorAgentFactory } from '../providers/cursor-agent/index.ts';
 import { geminiCliFactory } from '../providers/gemini-cli/index.ts';
 import { kiloCodeFactory } from '../providers/kilo-code/index.ts';
 import { openCodeGoFactory } from '../providers/opencode-go/index.ts';
@@ -47,6 +48,7 @@ export async function createRuntime(opts: CreateRuntimeOptions): Promise<Runtime
   providers.register(claudeCodeFactory);
   providers.register(codexCliFactory);
   providers.register(continueDevFactory);
+  providers.register(cursorAgentFactory);
   providers.register(geminiCliFactory);
   providers.register(kiloCodeFactory);
   providers.register(openCodeGoFactory);
