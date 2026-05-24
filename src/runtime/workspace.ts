@@ -36,13 +36,12 @@ async function refExists(root: string, ref: string): Promise<boolean> {
 }
 
 async function gitDiff(root: string, baseRef: string | undefined): Promise<string | undefined> {
-  const chunks: string[] = [];
   if (baseRef) {
-    const branchDiff = await runGitDiff(root, ['diff', `${baseRef}...HEAD`]);
-    if (branchDiff === null) return undefined;
-    if (branchDiff) chunks.push(branchDiff);
+    const branchDiff = await runGitDiff(root, ['diff', baseRef]);
+    return branchDiff === null ? undefined : branchDiff || undefined;
   }
 
+  const chunks: string[] = [];
   const stagedDiff = await runGitDiff(root, ['diff', '--cached']);
   if (stagedDiff === null) return undefined;
   if (stagedDiff) chunks.push(stagedDiff);
