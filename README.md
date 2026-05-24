@@ -1,64 +1,90 @@
 # Quorum
 
-Provider-agnostic multi-model consensus review for AI-assisted code changes.
+[![CI](https://github.com/S1933/quorum-claude/actions/workflows/ci.yml/badge.svg)](https://github.com/S1933/quorum-claude/actions/workflows/ci.yml)
+[![Bun](https://img.shields.io/badge/runtime-Bun-000?logo=bun&logoColor=white)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-plugin-6b46c1)](#claude-code-plugin)
 
-The product focus: when an implementation is done in Claude Code, run a **parallel review meeting across multiple LLMs from multiple providers**, then aggregate findings with a consensus engine that surfaces which issues independent reviewers agreed on.
+Provider-agnostic consensus review for AI-assisted code changes.
 
----
+Quorum runs several AI reviewers on the same git diff, compares their findings, then highlights issues multiple reviewers agree on. It can run as a Bun CLI or as a Claude Code plugin.
 
-## How it works
+## Why
 
-1. **Define reviewer providers** — OpenRouter (any model), local Claude Code SDK, or your own adapter.
-2. **Define personas** — a system prompt + role declaration (security, performance, architecture, …).
-3. **Bind reviewers** — `(persona, provider)` pairs. Same persona on two providers = one consensus signal.
-4. **Run a review pipeline** — parallel reviewers critique the finished diff. The consensus engine groups findings by file + line overlap and emits an agreement badge.
+Single-model review is noisy. Quorum treats review like a small panel:
 
+- one diff
+- multiple personas
+- multiple providers or models
+- one consensus report
+
+## How It Works
+
+```mermaid
+flowchart LR
+  Diff["Git diff"] --> Pipeline["Review pipeline"]
+  Config["quorum.yaml"] --> Pipeline
+
+  Pipeline --> R1["Security reviewer"]
+  Pipeline --> R2["Performance reviewer"]
+  Pipeline --> R3["Architecture reviewer"]
+
+  R1 --> Findings["Structured findings"]
+  R2 --> Findings
+  R3 --> Findings
+
+  Findings --> Consensus["Consensus engine"]
+  Consensus --> Report["Terminal / Markdown report"]
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Distribution: Claude Code review plugin · CLI                │
-├──────────────────────────────────────────────────────────────┤
-│  UI: terminal renderer · markdown report · event subscribers  │
-├──────────────────────────────────────────────────────────────┤
-│  Runtime: event bus · plugin lifecycle · config loader        │
-├──────────────────────────────────────────────────────────────┤
-│  Pipelines: parallel/sequential review executor · timeout     │
-├──────────────────────────────────────────────────────────────┤
-│  Reviewers (Persona+Provider binding)   Consensus engine      │
-├──────────────────────────────────────────────────────────────┤
-│  Provider adapters: openrouter · claude-code · (ollama …)    │
-├──────────────────────────────────────────────────────────────┤
-│  Core: types, schemas, pure logic — no I/O                    │
-└──────────────────────────────────────────────────────────────┘
+
+## Core Model
+
+```mermaid
+flowchart TD
+  Provider["Provider<br/>OpenRouter, Claude Code, ..."]
+  Persona["Persona<br/>security, performance, architecture"]
+  Reviewer["Reviewer<br/>persona + provider"]
+  Pipeline["Pipeline<br/>parallel or sequential reviewers"]
+  Consensus["Consensus<br/>groups matching findings"]
+
+  Provider --> Reviewer
+  Persona --> Reviewer
+  Reviewer --> Pipeline
+  Pipeline --> Consensus
 ```
 
----
+## Features
+
+- Provider adapters: OpenRouter and local Claude Code
+- Portable personas independent from provider choice
+- Parallel or sequential review pipelines
+- YAML config with `env:VAR` and `${VAR}` secret interpolation
+- Consensus grouping by file, line range, and category
+- Terminal output and Markdown report rendering
+- Claude Code slash commands
 
 ## Requirements
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh) `>= 1.1`
+- Git repository with changes to review
+- Optional: `OPENROUTER_API_KEY` for OpenRouter-backed reviewers
 
----
-
-## Installation
+## Install
 
 ```bash
-git clone https://github.com/your-org/quorum-claude-code
-cd quorum-claude-code
+git clone https://github.com/S1933/quorum-claude.git
+cd quorum-claude
 bun install
 ```
 
----
-
-## Configuration
-
-Copy the example config and fill in your API key:
+## Configure
 
 ```bash
 cp quorum.yaml.example quorum.yaml
 export OPENROUTER_API_KEY=sk-or-...
 ```
 
-`quorum.yaml` has three layers:
+Minimal config shape:
 
 ```yaml
 version: 1
@@ -66,58 +92,46 @@ version: 1
 providers:
   openrouter-claude:
     type: openrouter
-    api_key: env:OPENROUTER_API_KEY   # env: prefix for secrets
+    api_key: env:OPENROUTER_API_KEY
     model: anthropic/claude-opus-4
-    temperature: 0.2
-
-  claude-code-local:
-    type: claude-code
-    model: claude-opus-4-7
 
 personas:
   security:
-    description: Adversarial security review
-    system: |
-      You are an adversarial security reviewer. Focus on injection,
-      authn/authz, secret handling, and unsafe deserialization. Be specific.
+    description: Security review
+    system: Find security risks in this diff. Be specific and cite lines.
 
 reviewers:
-  sec-opus:  { persona: security, provider: openrouter-claude }
-  sec-local: { persona: security, provider: claude-code-local }
+  sec-opus:
+    persona: security
+    provider: openrouter-claude
 
 pipelines:
-  # Same persona, two providers — findings that both flag get an agreement badge
-  consensus-security:
+  default:
     parallel: true
-    reviewers: [sec-opus, sec-local]
-    consensus: { strategy: overlap-v1, requireAgreement: 2 }
+    reviewers: [sec-opus]
+    consensus:
+      strategy: overlap-v1
 ```
 
-`env:VAR` and `${VAR}` are both supported. Missing env vars fail at provider instantiation, not at parse time, so you get a clear error pointing to the right reviewer.
+For a complete example with several reviewers, see [`quorum.yaml.example`](quorum.yaml.example).
 
----
-
-## CLI usage
+## Use The CLI
 
 ```bash
-# Review the current git diff against the default branch
+# Review current changes against the default branch
 bun quorum review
 
-# Run a specific pipeline (short form)
+# Run a named pipeline
 bun quorum review consensus-security
 
-# Equivalent explicit form
+# Same, explicit flag
 bun quorum review --pipeline consensus-security
 
-# Show the loaded config (env: values redacted)
+# Print loaded config with secrets redacted
 bun quorum config
 ```
 
----
-
-## Claude Code plugin
-
-Quorum ships as a Claude Code plugin. Once installed, two slash commands are available inside Claude Code:
+## Claude Code Plugin
 
 Install from the Claude Code plugin marketplace:
 
@@ -126,64 +140,76 @@ claude plugin marketplace add S1933/quorum-claude
 claude plugin install quorum@quorum-plugins
 ```
 
-| Command | What it does |
+Available slash commands:
+
+| Command | Purpose |
 |---|---|
-| `/quorum-review` | Run the configured default pipeline on the current diff and render the consensus report inline |
-| `/quorum-config` | Show the loaded `quorum.yaml` with secrets redacted |
+| `/quorum-review` | Run the default review pipeline on the current diff |
+| `/quorum-review <pipeline>` | Run a named pipeline |
+| `/quorum-config` | Show loaded config with secrets redacted |
 
-Use `/quorum-review consensus-security` to run a named pipeline. The plugin is a thin shell around the same review CLI entry point — zero domain logic in the command files.
-
-For local development, load it directly:
+For local plugin development:
 
 ```bash
 claude --plugin-dir ./plugin
 ```
 
-Then use `/quorum:quorum-review` or `/quorum:quorum-config` inside Claude Code.
+Then run `/quorum:quorum-review` or `/quorum:quorum-config` in Claude Code.
 
----
+## Consensus
 
-## Consensus: `overlap-v1`
+V1 ships `overlap-v1`.
 
-V1 ships one consensus strategy. Two findings are grouped together when:
+Findings are grouped when they share:
 
-1. Same file path
-2. Line ranges overlap (or are within ±2 lines)
-3. Same category (`security` | `performance` | `architecture` | `correctness` | `style`)
+- same file path
+- overlapping line range, with a two-line tolerance
+- same category: `security`, `performance`, `architecture`, `correctness`, or `style`
 
-Each group gets an **N reviewers agreed** badge. Findings raised by only one reviewer are surfaced separately.
+Groups with multiple reviewers get an agreement badge. Single-reviewer findings are still reported separately.
 
-Semantic dedup (embedding-based), contradiction detection, and per-reviewer trust scores are roadmap items — see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+```mermaid
+flowchart LR
+  A["Reviewer A<br/>src/auth.ts:42<br/>security"] --> G["Agreement group"]
+  B["Reviewer B<br/>src/auth.ts:43<br/>security"] --> G
+  C["Reviewer C<br/>src/db.ts:10<br/>performance"] --> U["Unique finding"]
 
----
-
-## Project structure
-
+  G --> Badge["2 reviewers agreed"]
 ```
+
+## Project Layout
+
+```text
 src/
-├── core/          # Types, schemas, pure logic. No I/O.
-├── providers/     # openrouter + claude-code adapters
-├── reviewers/     # Persona+Provider binding logic
-├── consensus/     # overlap-v1 strategy + registry
-├── config/        # YAML schema, loader, env interpolation
-├── runtime/       # Event bus, plugin lifecycle, workspace
-├── ui/            # Terminal renderer, markdown report writer
-└── cli/           # Bun entrypoint (reused by Claude Code commands)
+  cli/          Bun CLI entrypoint
+  config/       YAML loading, schema validation, env interpolation
+  consensus/    overlap-v1 strategy
+  core/         pure domain types and contracts
+  pipelines/    review execution
+  providers/    OpenRouter and Claude Code adapters
+  reviewers/    persona/provider binding
+  runtime/      event bus, plugin lifecycle, workspace probing
+  ui/           terminal and Markdown output
+tests/          Bun test suite
+plugin/         Claude Code plugin commands
 ```
 
-Dependencies flow downward only. `core/` imports nothing from the project.
-
----
-
-## Development
+## Develop
 
 ```bash
-bun test        # run tests
-bun typecheck   # type-check without emitting
+bun run typecheck
+bun test
 ```
 
----
+CI runs both commands on every pull request and every push to `main`.
 
 ## Roadmap
 
-See [ARCHITECTURE.md § V1 milestones](docs/ARCHITECTURE.md) for the six-milestone implementation plan, and [§ Out of scope](docs/ARCHITECTURE.md#14-out-of-scope-for-v1) for explicit deferrals (DAG pipelines, CI integration, Codex/Gemini providers, web dashboard).
+- More provider adapters, including local model runtimes
+- Semantic deduplication beyond file and line overlap
+- Contradiction detection between reviewers
+- Per-reviewer trust and calibration
+- CI-native review command
+- Web dashboard
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deeper design notes.
