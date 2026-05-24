@@ -66,9 +66,17 @@ providers:
     type: codex-cli
     model: gpt-5-codex
 
+  continue-local:
+    type: continue-dev
+    config: continuedev/default-cli-config
+
   gemini-local:
     type: gemini-cli
     model: gemini-2.5-pro
+
+  kilo-local:
+    type: kilo-code
+    model: anthropic/claude-sonnet-4-20250514
 
   opencode-local:
     type: opencode-go
@@ -97,9 +105,17 @@ reviewers:
     persona: security
     provider: codex-local
 
+  sec-continue:
+    persona: security
+    provider: continue-local
+
   sec-gemini:
     persona: security
     provider: gemini-local
+
+  sec-kilo:
+    persona: security
+    provider: kilo-local
 
   sec-ollama:
     persona: security
