@@ -51,7 +51,7 @@ class OpenCodeGoProvider implements Provider {
     return args;
   }
 
-  private async runOnce(prompt: string, ctx: ExecCtx): Promise<string> {
+  private async runOnce(prompt: string, ctx: ExecCtx, reviewerId: string): Promise<string> {
     const cwd = this.cfg.cwd ?? this.pluginCtx.workspaceRoot;
     const proc = Bun.spawn({
       cmd: [this.cfg.binary, ...this.args(prompt, ctx)],
@@ -75,7 +75,15 @@ class OpenCodeGoProvider implements Provider {
 
     try {
       const [stdout, stderr, exitCode] = await Promise.all([
-        readPreviewedStdout(proc.stdout, ctx),
+        readPreviewedStdout(proc.stdout, {
+          onToken: (text) => {
+            ctx.bus.emit({
+              type: 'reviewer.event',
+              reviewerId,
+              event: { type: 'token', text },
+            });
+          },
+        }),
         new Response(proc.stderr).text(),
         proc.exited,
       ]);
@@ -107,7 +115,7 @@ class OpenCodeGoProvider implements Provider {
       REVIEW_OUTPUT_INSTRUCTIONS,
       task.instruction,
     ].join('\n\n');
-    const raw = await this.runOnce(prompt, ctx);
+    const raw = await this.runOnce(prompt, ctx, task.reviewerId);
     const findings = parseFindings(raw, task.reviewerId);
 
     for (const finding of findings) {

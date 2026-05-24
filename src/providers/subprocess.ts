@@ -1,25 +1,20 @@
-import type { ExecCtx } from '../core/provider.ts';
-
 export async function readPreviewedStdout(
   stream: ReadableStream<Uint8Array>,
-  ctx: ExecCtx,
+  opts: { onToken(text: string): void },
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  let out = '';
+  const chunks: string[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     const chunk = decoder.decode(value, { stream: true });
-    out += chunk;
-    ctx.bus.emit({
-      type: 'reviewer.event',
-      reviewerId: ctx.reviewerId ?? 'unknown',
-      event: { type: 'token', text: chunk },
-    });
+    chunks.push(chunk);
+    opts.onToken(chunk);
   }
 
-  out += decoder.decode();
-  return out;
+  const tail = decoder.decode();
+  if (tail) chunks.push(tail);
+  return chunks.join('');
 }
