@@ -24,6 +24,12 @@ providers:
     type: opencode-go
     command_style: prompt
 
+  ollama-local:
+    type: ollama
+    model: llama3.1
+    base_url: http://localhost:11434
+    temperature: 0.2
+
 personas:
   security:
     description: Adversarial security review
@@ -49,6 +55,7 @@ reviewers:
   perf-opus: { persona: performance,  provider: openrouter-claude }
   arch-opus: { persona: architecture, provider: openrouter-claude }
   sec-open:  { persona: security,     provider: opencode-local }
+  sec-ollama: { persona: security,    provider: ollama-local }
 
 pipelines:
   default:

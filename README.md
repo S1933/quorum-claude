@@ -55,7 +55,7 @@ flowchart TD
 
 ## Features
 
-- Provider adapters: OpenRouter, local Claude Code, and OpenCode Go
+- Provider adapters: OpenRouter, local Claude Code, OpenCode Go, and Ollama
 - Portable personas independent from provider choice
 - Parallel or sequential review pipelines
 - YAML config with `env:VAR` and `${VAR}` secret interpolation
@@ -68,6 +68,7 @@ flowchart TD
 - [Bun](https://bun.sh) `>= 1.1`
 - Git repository with changes to review
 - Optional: `OPENROUTER_API_KEY` for OpenRouter-backed reviewers
+- Optional: [Ollama](https://ollama.com) running locally for `type: ollama`
 
 ## Install
 
@@ -103,6 +104,11 @@ providers:
     type: opencode-go
     command_style: prompt
 
+  ollama-local:
+    type: ollama
+    model: llama3.1
+    base_url: http://localhost:11434
+
 personas:
   security:
     description: Security review
@@ -117,10 +123,14 @@ reviewers:
     persona: security
     provider: claude-local
 
+  sec-ollama:
+    persona: security
+    provider: ollama-local
+
 pipelines:
   default:
     parallel: true
-    reviewers: [sec-opus, sec-claude-local]
+    reviewers: [sec-opus, sec-claude-local, sec-ollama]
     consensus:
       strategy: overlap-v1
 ```
@@ -128,6 +138,8 @@ pipelines:
 For a complete example with several reviewers, see [`quorum.yaml.example`](quorum.yaml.example).
 
 Use `model:` or reviewer `overrides.model` to pass `--model` to OpenCode. Use `command_style: run` for newer OpenCode CLIs that prefer `opencode run --model`.
+
+For Ollama, run `ollama serve` locally and set `type: ollama` with the local model name. Supported fields: `model`, `base_url`, `temperature`, `max_tokens`, `top_p`, and `keep_alive`.
 
 ## Use The CLI
 

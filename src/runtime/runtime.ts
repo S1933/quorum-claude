@@ -10,6 +10,7 @@ import { bindReviewer, type BoundReviewer } from '../reviewers/reviewer.ts';
 import { openRouterFactory } from '../providers/openrouter/index.ts';
 import { claudeCodeFactory } from '../providers/claude-code/index.ts';
 import { openCodeGoFactory } from '../providers/opencode-go/index.ts';
+import { ollamaFactory } from '../providers/ollama/index.ts';
 import { overlapV1 } from '../consensus/overlap-v1.ts';
 import { ConfigError } from '../core/errors.ts';
 import type { EventBus } from '../core/events.ts';
@@ -41,6 +42,7 @@ export async function createRuntime(opts: CreateRuntimeOptions): Promise<Runtime
   providers.register(openRouterFactory);
   providers.register(claudeCodeFactory);
   providers.register(openCodeGoFactory);
+  providers.register(ollamaFactory);
   consensus.register(overlapV1);
 
   const providerInstances = new Map<string, Provider>();
