@@ -11,12 +11,6 @@ Quorum runs several AI reviewers on the same git diff, compares their findings, 
 
 ## How It Works
 
-1. Read the git diff and `quorum.yaml`.
-2. Run configured reviewers in parallel or sequence.
-3. Collect structured findings from each reviewer.
-4. Group overlapping findings with the consensus engine.
-5. Render terminal, Markdown, or JSON output.
-
 ```text
 git diff + quorum.yaml
         |
@@ -35,7 +29,6 @@ consensus report
 
 ## Features
 
-- Provider adapters: OpenRouter, local Claude Code, OpenCode Go, and Ollama
 - Portable personas independent from provider choice
 - Parallel or sequential review pipelines
 - YAML config with `env:VAR` and `${VAR}` secret interpolation
@@ -43,6 +36,19 @@ consensus report
 - Terminal output and Markdown report rendering
 - Machine-readable JSON output for scripts, CI, and editor integrations
 - Claude Code slash commands
+
+## Supported Providers
+
+| Status | Provider | Type |
+|---|---|---|
+| 🟢 → | OpenRouter | `openrouter` |
+| 🟢 → | Claude Code | `claude-code` |
+| 🟢 → | Codex CLI | `codex-cli` |
+| 🟢 → | Continue.dev | `continue-dev` |
+| 🟢 → | Gemini CLI | `gemini-cli` |
+| 🟢 → | Kilo Code CLI | `kilo-code` |
+| 🟢 → | OpenCode Go | `opencode-go` |
+| 🟢 → | Ollama | `ollama` |
 
 ## Requirements
 
@@ -60,7 +66,6 @@ bun install
 
 ```bash
 cp quorum.yaml.example quorum.yaml
-export OPENROUTER_API_KEY=sk-or-...
 ```
 
 Minimal config shape:
@@ -68,45 +73,13 @@ Minimal config shape:
 ```yaml
 version: 1
 
+defaults:
+  pipeline: default
+
 providers:
-  openrouter-claude:
-    type: openrouter
-    api_key: env:OPENROUTER_API_KEY
-    model: anthropic/claude-opus-4
-
-  openrouter-gpt:
-    type: openrouter
-    api_key: env:OPENROUTER_API_KEY
-    model: openai/gpt-5-codex
-
-  claude-local:
+  claude-code-local:
     type: claude-code
-    model: sonnet
-
-  codex-local:
-    type: codex-cli
-    model: gpt-5-codex
-
-  continue-local:
-    type: continue-dev
-    config: continuedev/default-cli-config
-
-  gemini-local:
-    type: gemini-cli
-    model: gemini-2.5-pro
-
-  kilo-local:
-    type: kilo-code
-    model: anthropic/claude-sonnet-4-20250514
-
-  opencode-local:
-    type: opencode-go
-    command_style: prompt
-
-  ollama-local:
-    type: ollama
-    model: llama3.1
-    base_url: http://localhost:11434
+    model: claude-opus-4-7
 
 personas:
   security:
@@ -114,51 +87,19 @@ personas:
     system: Find security risks in this diff. Be specific and cite lines.
 
 reviewers:
-  sec-opus:
-    persona: security
-    provider: openrouter-claude
-
-  sec-gpt:
-    persona: security
-    provider: openrouter-gpt
-
   sec-claude-local:
     persona: security
-    provider: claude-local
-
-  sec-codex:
-    persona: security
-    provider: codex-local
-
-  sec-continue:
-    persona: security
-    provider: continue-local
-
-  sec-gemini:
-    persona: security
-    provider: gemini-local
-
-  sec-kilo:
-    persona: security
-    provider: kilo-local
-
-  sec-open:
-    persona: security
-    provider: opencode-local
-
-  sec-ollama:
-    persona: security
-    provider: ollama-local
+    provider: claude-code-local
 
 pipelines:
   default:
     parallel: true
-    reviewers: [sec-opus, sec-gpt, sec-claude-local, sec-codex, sec-continue, sec-gemini, sec-kilo, sec-open, sec-ollama]
+    reviewers: [sec-claude-local]
     consensus:
       strategy: overlap-v1
 ```
 
-For a complete example with several reviewers, see [`quorum.yaml.example`](quorum.yaml.example).
+For the ready-to-copy starter config, see [`quorum.yaml.example`](quorum.yaml.example).
 
 ## Use The CLI
 

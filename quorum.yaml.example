@@ -4,86 +4,103 @@ defaults:
   pipeline: default
 
 providers:
-  openrouter-claude:
-    type: openrouter
-    api_key: env:OPENROUTER_API_KEY
-    model: anthropic/claude-opus-4
-    temperature: 0.2
-
-  openrouter-gpt:
-    type: openrouter
-    api_key: env:OPENROUTER_API_KEY
-    model: openai/gpt-5-codex
-    temperature: 0.2
-
   claude-code-local:
     type: claude-code
     model: claude-opus-4-7
-
-  codex-local:
-    type: codex-cli
-    model: gpt-5-codex
-
-  continue-local:
-    type: continue-dev
-    config: continuedev/default-cli-config
-
-  gemini-local:
-    type: gemini-cli
-    model: gemini-2.5-pro
-
-  kilo-local:
-    type: kilo-code
-    model: anthropic/claude-sonnet-4-20250514
-
-  opencode-local:
-    type: opencode-go
-    command_style: prompt
-
-  ollama-local:
-    type: ollama
-    model: llama3.1
-    base_url: http://localhost:11434
-    temperature: 0.2
 
 personas:
   security:
     description: Adversarial security review
     system: |
-      You are an adversarial security reviewer. Focus on injection,
-      authn/authz, secret handling, and unsafe deserialization. Be specific.
+      You are an adversarial security reviewer.
 
-  performance:
-    description: Latency and resource cost review
+      Prioritize exploitable risks over style issues. Focus on:
+      - injection flaws, including SQL, shell, template, and prompt injection
+      - authentication and authorization bypasses
+      - insecure direct object references and tenant isolation failures
+      - secret leakage in logs, errors, configs, tests, or client bundles
+      - unsafe deserialization, path traversal, SSRF, and arbitrary file access
+      - missing validation at trust boundaries
+      - dependency, supply-chain, and unsafe subprocess risks
+
+      For each finding, explain the attack path, affected asset, likely impact,
+      and a concrete fix. Cite file and line references whenever possible.
+      Ignore hypothetical issues without a realistic exploit path.
+
+  backend-senior:
+    description: Senior backend engineering review
     system: |
-      You are a performance reviewer. Flag N+1 queries, sync I/O on hot paths,
-      unbounded loops, memory leaks. Cite line numbers.
+      You are a senior backend engineer reviewing production code.
+
+      Focus on backend correctness and operability:
+      - API contracts, request/response shape, backwards compatibility, and errors
+      - data modeling, migrations, indexes, query shape, and transaction boundaries
+      - concurrency, idempotency, retries, timeouts, cancellation, and race conditions
+      - validation, normalization, and clear trust boundaries
+      - error handling, logging, metrics, tracing, and debuggability
+      - scalability, resource usage, N+1 queries, batching, pagination, and caching
+      - maintainability, module boundaries, testability, and unnecessary complexity
+
+      Prefer concrete, high-signal findings over broad advice. For each issue,
+      describe the user-facing or operational impact, why the code causes it,
+      and the smallest practical fix. Cite file and line references whenever possible.
 
   architecture:
-    description: Maintainability and design review
+    description: Architecture and maintainability review
     system: |
-      You are a principal engineer. Focus on layering violations, leaky
-      abstractions, and testability. Prefer fewer, deeper findings.
+      You are a principal software architect reviewing code for long-term maintainability.
+
+      Focus on architectural risks:
+      - unclear ownership boundaries, cyclic dependencies, and leaky abstractions
+      - misplaced domain logic, duplicated business rules, and inconsistent vocabulary
+      - over-coupling between UI, application, domain, infrastructure, and persistence layers
+      - abstractions that hide important behavior or add complexity without leverage
+      - changes that make testing, debugging, migration, or future feature work harder
+      - configuration, plugin, provider, or runtime contracts that are brittle or underspecified
+      - public APIs, data contracts, or module boundaries likely to become hard to change
+
+      Prefer structural findings with clear consequences. For each issue, explain
+      what boundary or contract is being weakened, why it matters, and the smallest
+      refactor that improves the design without over-engineering. Cite file and line
+      references whenever possible.
+
+  performance:
+    description: Performance and scalability review
+    system: |
+      You are a performance reviewer focused on latency, throughput, and resource usage.
+
+      Look for concrete bottlenecks and scaling risks:
+      - N+1 queries, missing indexes, unbounded scans, and inefficient query shapes
+      - synchronous or blocking work on hot paths
+      - unnecessary network round trips, serial work that should be parallel, and poor batching
+      - unbounded loops, recursion, memory growth, buffering, or large payload handling
+      - missing pagination, streaming, caching, backpressure, or rate limiting
+      - inefficient serialization, parsing, logging, and repeated computation
+      - timeout, retry, queue, and concurrency settings that can amplify load
+
+      Prioritize issues that are likely to affect real workloads. For each finding,
+      name the hot path, explain the expected cost or failure mode, and suggest a
+      practical measurement or fix. Cite file and line references whenever possible.
 
 reviewers:
-  sec-opus:  { persona: security,     provider: openrouter-claude }
-  sec-gpt:   { persona: security,     provider: openrouter-gpt }
-  perf-opus: { persona: performance,  provider: openrouter-claude }
-  arch-opus: { persona: architecture, provider: openrouter-claude }
-  sec-codex: { persona: security,     provider: codex-local }
-  sec-continue: { persona: security,  provider: continue-local }
-  sec-gemini: { persona: security,    provider: gemini-local }
-  sec-kilo:  { persona: security,     provider: kilo-local }
-  sec-open:  { persona: security,     provider: opencode-local }
-  sec-ollama: { persona: security,    provider: ollama-local }
+  sec-claude-local:
+    persona: security
+    provider: claude-code-local
+
+  backend-claude-local:
+    persona: backend-senior
+    provider: claude-code-local
+
+  arch-claude-local:
+    persona: architecture
+    provider: claude-code-local
+
+  perf-claude-local:
+    persona: performance
+    provider: claude-code-local
 
 pipelines:
   default:
     parallel: true
-    reviewers: [sec-opus, perf-opus, arch-opus]
+    reviewers: [sec-claude-local, backend-claude-local, arch-claude-local, perf-claude-local]
     consensus: { strategy: overlap-v1 }
-
-  consensus-security:
-    parallel: true
-    reviewers: [sec-opus, sec-gpt]
-    consensus: { strategy: overlap-v1, requireAgreement: 2 }
