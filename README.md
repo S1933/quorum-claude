@@ -20,38 +20,19 @@ Single-model review is noisy. Quorum treats review like a small panel:
 
 ## How It Works
 
-```mermaid
-flowchart LR
-  Diff["Git diff"] --> Pipeline["Review pipeline"]
-  Config["quorum.yaml"] --> Pipeline
-
-  Pipeline --> R1["Security reviewer"]
-  Pipeline --> R2["Performance reviewer"]
-  Pipeline --> R3["Architecture reviewer"]
-
-  R1 --> Findings["Structured findings"]
-  R2 --> Findings
-  R3 --> Findings
-
-  Findings --> Consensus["Consensus engine"]
-  Consensus --> Report["Terminal / Markdown report"]
-```
+1. Read the git diff and `quorum.yaml`.
+2. Run configured reviewers in parallel or sequence.
+3. Collect structured findings from each reviewer.
+4. Group overlapping findings with the consensus engine.
+5. Render terminal, Markdown, or JSON output.
 
 ## Core Model
 
-```mermaid
-flowchart TD
-  Provider["Provider<br/>OpenRouter, Claude Code, ..."]
-  Persona["Persona<br/>security, performance, architecture"]
-  Reviewer["Reviewer<br/>persona + provider"]
-  Pipeline["Pipeline<br/>parallel or sequential reviewers"]
-  Consensus["Consensus<br/>groups matching findings"]
-
-  Provider --> Reviewer
-  Persona --> Reviewer
-  Reviewer --> Pipeline
-  Pipeline --> Consensus
-```
+- Provider: OpenRouter, Claude Code, OpenCode Go, Ollama
+- Persona: security, performance, architecture, or custom prompt
+- Reviewer: persona + provider
+- Pipeline: ordered or parallel reviewers
+- Consensus: grouped matching findings
 
 ## Features
 
@@ -67,9 +48,6 @@ flowchart TD
 ## Requirements
 
 - [Bun](https://bun.sh) `>= 1.1`
-- Git repository with changes to review
-- Optional: `OPENROUTER_API_KEY` for OpenRouter-backed reviewers
-- Optional: [Ollama](https://ollama.com) running locally for `type: ollama`
 
 ## Install
 
@@ -199,14 +177,13 @@ Findings are grouped when they share:
 
 Groups with multiple reviewers get an agreement badge. Single-reviewer findings are still reported separately.
 
-```mermaid
-flowchart LR
-  A["Reviewer A<br/>src/auth.ts:42<br/>security"] --> G["Agreement group"]
-  B["Reviewer B<br/>src/auth.ts:43<br/>security"] --> G
-  C["Reviewer C<br/>src/db.ts:10<br/>performance"] --> U["Unique finding"]
+Example:
 
-  G --> Badge["2 reviewers agreed"]
-```
+- Reviewer A: `src/auth.ts:42`, `security`
+- Reviewer B: `src/auth.ts:43`, `security`
+- Result: one agreement group, `2 reviewers agreed`
+- Reviewer C: `src/db.ts:10`, `performance`
+- Result: one single-reviewer finding
 
 ## Roadmap
 
