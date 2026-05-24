@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'bun:test';
@@ -11,6 +11,7 @@ import { ConsensusRegistry } from '../src/consensus/registry.ts';
 import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { BoundReviewer } from '../src/reviewers/reviewer.ts';
 import { main, type CliDeps, type CliIo } from '../src/cli/index.ts';
+import { loadConfigFromPath } from '../src/config/loader.ts';
 import { InMemoryEventBus } from '../src/runtime/bus.ts';
 import type { Runtime } from '../src/runtime/runtime.ts';
 
@@ -145,6 +146,90 @@ describe('cli', () => {
     expect(reportJson.schemaVersion).toBe(1);
     expect(reportJson.reviews[0].findings[0].title).toBe('Fake finding');
   });
+
+  test('init writes a default claude-code config', async () => {
+    const io = captureIo();
+    const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
+    const configPath = join(tmp, 'quorum.yaml');
+
+    const code = await main(
+      ['init', '--config', configPath],
+      deps({}),
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(io.stdoutText()).toContain(`Created ${configPath}`);
+    const cfg = await loadConfigFromPath(configPath);
+    expect(cfg.providers['claude-code-local']).toEqual({
+      type: 'claude-code',
+      model: 'claude-opus-4-7',
+    });
+    expect(Object.keys(cfg.personas)).toEqual([
+      'security',
+      'backend-senior',
+      'architecture',
+      'performance',
+    ]);
+    expect(cfg.pipelines.default?.reviewers).toEqual([
+      'sec-reviewer',
+      'backend-reviewer',
+      'arch-reviewer',
+      'perf-reviewer',
+    ]);
+    expect(cfg.personas.security?.system.trim()).toBe('Template security prompt.');
+  });
+
+  test('init supports provider, model, and persona selection', async () => {
+    const io = captureIo();
+    const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
+    const configPath = join(tmp, 'nested', 'quorum.yaml');
+
+    const code = await main(
+      [
+        'init',
+        '--config',
+        configPath,
+        '--provider',
+        'opencode-go',
+        '--model',
+        'anthropic/claude-sonnet-4',
+        '--personas',
+        'security,performance',
+      ],
+      deps({}),
+      io,
+    );
+
+    expect(code).toBe(0);
+    const cfg = await loadConfigFromPath(configPath);
+    expect(cfg.providers['opencode-local']).toEqual({
+      type: 'opencode-go',
+      model: 'anthropic/claude-sonnet-4',
+      command_style: 'prompt',
+    });
+    expect(Object.keys(cfg.personas)).toEqual(['security', 'performance']);
+    expect(Object.keys(cfg.reviewers)).toEqual(['sec-reviewer', 'perf-reviewer']);
+    expect(cfg.pipelines.default?.reviewers).toEqual(['sec-reviewer', 'perf-reviewer']);
+  });
+
+  test('init refuses to overwrite an existing config without force', async () => {
+    const io = captureIo();
+    const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
+    const configPath = join(tmp, 'quorum.yaml');
+    await mkdir(tmp, { recursive: true });
+    await Bun.write(configPath, 'existing');
+
+    const code = await main(
+      ['init', '--config', configPath],
+      deps({}),
+      io,
+    );
+
+    expect(code).toBe(1);
+    expect(await Bun.file(configPath).text()).toBe('existing');
+    expect(io.stderrText()).toContain('Config file already exists');
+  });
 });
 
 function config(): QuorumConfig {
@@ -182,11 +267,33 @@ function deps(overrides: Partial<CliDeps>): CliDeps {
   return {
     loadConfigFromPath: async () => config(),
     findConfigPath: () => '/repo/quorum.yaml',
+    loadInitPersonaTemplates: async () => personaTemplates(),
     inferRepoRoot: async () => '/repo',
     probeWorkspace: async () => ({ root: '/repo' }),
     createRuntime: async () => fakeRuntime(),
     now: () => 1,
     ...overrides,
+  };
+}
+
+function personaTemplates(): Record<string, { description: string; system: string }> {
+  return {
+    security: {
+      description: 'Adversarial security review',
+      system: 'Template security prompt.',
+    },
+    'backend-senior': {
+      description: 'Senior backend engineering review',
+      system: 'Template backend prompt.',
+    },
+    architecture: {
+      description: 'Architecture and maintainability review',
+      system: 'Template architecture prompt.',
+    },
+    performance: {
+      description: 'Performance and scalability review',
+      system: 'Template performance prompt.',
+    },
   };
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { loadConfigFromPath, findConfigPath } from '../config/loader.ts';
 import type { QuorumConfig } from '../config/schema.ts';
 import { createRuntime as createRuntimeDefault, type Runtime } from '../runtime/runtime.ts';
@@ -27,6 +28,7 @@ export interface CliIo {
 export interface CliDeps {
   loadConfigFromPath(path: string): Promise<QuorumConfig>;
   findConfigPath(cwd?: string): string;
+  loadInitPersonaTemplates(): Promise<Record<string, PersonaTemplate>>;
   inferRepoRoot(start?: string): Promise<string>;
   probeWorkspace(opts: { root: string; baseRef?: string }): Promise<WorkspaceInfo>;
   createRuntime(opts: Parameters<typeof createRuntimeDefault>[0]): Promise<Runtime>;
@@ -41,6 +43,7 @@ const defaultIo: CliIo = {
 const defaultDeps: CliDeps = {
   loadConfigFromPath,
   findConfigPath,
+  loadInitPersonaTemplates,
   inferRepoRoot,
   probeWorkspace,
   createRuntime: createRuntimeDefault,
@@ -79,6 +82,7 @@ function printHelp(io: CliIo): void {
 Usage:
   quorum review [pipeline-id] [--pipeline <id>] [--base <ref>] [--config <path>] [--report <path>] [--format text|json] [--json] [--no-color] [--no-preview]
   quorum config [--config <path>]
+  quorum init [--config <path>] [--provider <type>] [--model <id>] [--personas <ids>] [--force]
   quorum help
 
 Defaults are read from quorum.yaml in the working directory.
@@ -103,6 +107,8 @@ export async function main(
         return await cmdReview(positional, flags, deps, io);
       case 'config':
         return await cmdConfig(flags, deps, io);
+      case 'init':
+        return await cmdInit(flags, deps, io);
       default:
         io.stderr.write(`Unknown command: ${command}\n\n`);
         printHelp(io);
@@ -203,6 +209,31 @@ async function cmdConfig(
   return 0;
 }
 
+async function cmdInit(
+  flags: Record<string, string | boolean>,
+  deps: CliDeps,
+  io: CliIo,
+): Promise<number> {
+  const configPath = typeof flags.config === 'string' ? flags.config : deps.findConfigPath();
+  if (await Bun.file(configPath).exists()) {
+    if (flags.force !== true) {
+      throw new ConfigError(`Config file already exists: ${configPath}. Pass --force to overwrite.`);
+    }
+  }
+
+  const provider = initProvider(flags.provider);
+  const model = typeof flags.model === 'string' ? flags.model : defaultModel(provider);
+  const personaTemplates = await deps.loadInitPersonaTemplates();
+  const personas = initPersonas(flags.personas, personaTemplates);
+  const yaml = renderInitConfig({ provider, model, personas, personaTemplates });
+
+  await writeReport(configPath, yaml);
+  io.stdout.write(`Created ${configPath}\n`);
+  io.stdout.write(`Provider: ${provider}\n`);
+  io.stdout.write(`Personas: ${personas.join(', ')}\n`);
+  return 0;
+}
+
 function redactConfig(cfg: unknown): unknown {
   if (typeof cfg !== 'object' || cfg === null) return cfg;
   if (Array.isArray(cfg)) return cfg.map(redactConfig);
@@ -236,6 +267,196 @@ function reviewOutputFormat(flags: Record<string, string | boolean>): 'text' | '
   if (flags.format === undefined) return 'text';
   if (flags.format === 'text' || flags.format === 'json') return flags.format;
   throw new ConfigError(`Unsupported review format "${String(flags.format)}"; expected "text" or "json"`);
+}
+
+type InitProvider =
+  | 'claude-code'
+  | 'openrouter'
+  | 'codex-cli'
+  | 'continue-dev'
+  | 'gemini-cli'
+  | 'kilo-code'
+  | 'opencode-go'
+  | 'ollama';
+
+type InitPersona = string;
+
+interface PersonaTemplate {
+  description: string;
+  system: string;
+}
+
+const INIT_PROVIDERS: InitProvider[] = [
+  'claude-code',
+  'openrouter',
+  'codex-cli',
+  'continue-dev',
+  'gemini-cli',
+  'kilo-code',
+  'opencode-go',
+  'ollama',
+];
+
+function initProvider(value: string | boolean | undefined): InitProvider {
+  const provider = value === undefined ? 'claude-code' : String(value);
+  if (INIT_PROVIDERS.includes(provider as InitProvider)) return provider as InitProvider;
+  throw new ConfigError(
+    `Unsupported init provider "${provider}"; expected one of ${INIT_PROVIDERS.join(', ')}`,
+  );
+}
+
+function initPersonas(
+  value: string | boolean | undefined,
+  templates: Record<string, PersonaTemplate>,
+): InitPersona[] {
+  const available = Object.keys(templates);
+  if (available.length === 0) throw new ConfigError('No personas found in quorum.yaml.example');
+  if (value === undefined || value === true) return available;
+  const personas = String(value)
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (personas.length === 0) throw new ConfigError('At least one persona is required');
+  for (const persona of personas) {
+    if (!templates[persona]) {
+      throw new ConfigError(
+        `Unsupported init persona "${persona}"; expected one of ${available.join(', ')}`,
+      );
+    }
+  }
+  return personas as InitPersona[];
+}
+
+function defaultModel(provider: InitProvider): string {
+  switch (provider) {
+    case 'claude-code':
+      return 'claude-opus-4-7';
+    case 'openrouter':
+      return 'anthropic/claude-opus-4';
+    case 'codex-cli':
+      return 'gpt-5-codex';
+    case 'continue-dev':
+      return 'continuedev/default-cli-config';
+    case 'gemini-cli':
+      return 'gemini-2.5-pro';
+    case 'kilo-code':
+      return 'anthropic/claude-sonnet-4-20250514';
+    case 'opencode-go':
+      return 'anthropic/claude-sonnet-4';
+    case 'ollama':
+      return 'llama3.1';
+  }
+}
+
+function providerId(provider: InitProvider): string {
+  switch (provider) {
+    case 'claude-code':
+      return 'claude-code-local';
+    case 'openrouter':
+      return 'openrouter-local';
+    case 'codex-cli':
+      return 'codex-local';
+    case 'continue-dev':
+      return 'continue-local';
+    case 'gemini-cli':
+      return 'gemini-local';
+    case 'kilo-code':
+      return 'kilo-local';
+    case 'opencode-go':
+      return 'opencode-local';
+    case 'ollama':
+      return 'ollama-local';
+  }
+}
+
+function reviewerId(persona: InitPersona): string {
+  switch (persona) {
+    case 'security':
+      return 'sec-reviewer';
+    case 'backend-senior':
+      return 'backend-reviewer';
+    case 'architecture':
+      return 'arch-reviewer';
+    case 'performance':
+      return 'perf-reviewer';
+    default:
+      return `${persona.replace(/[^a-zA-Z0-9_-]/g, '-')}-reviewer`;
+  }
+}
+
+function renderInitConfig(opts: {
+  provider: InitProvider;
+  model: string;
+  personas: InitPersona[];
+  personaTemplates: Record<string, PersonaTemplate>;
+}): string {
+  const provider = providerId(opts.provider);
+  const reviewers = opts.personas.map(reviewerId);
+  return [
+    'version: 1',
+    '',
+    'defaults:',
+    '  pipeline: default',
+    '',
+    'providers:',
+    renderProvider(provider, opts.provider, opts.model),
+    '',
+    'personas:',
+    ...opts.personas.map((persona) => renderPersona(persona, opts.personaTemplates[persona]!)),
+    '',
+    'reviewers:',
+    ...opts.personas.map((persona) => renderReviewer(reviewerId(persona), persona, provider)),
+    '',
+    'pipelines:',
+    '  default:',
+    '    parallel: true',
+    `    reviewers: [${reviewers.join(', ')}]`,
+    '    consensus: { strategy: overlap-v1 }',
+    '',
+  ].join('\n');
+}
+
+function renderProvider(id: string, type: InitProvider, model: string): string {
+  const lines = [`  ${id}:`, `    type: ${type}`];
+  if (type === 'openrouter') lines.push('    api_key: env:OPENROUTER_API_KEY');
+  if (type === 'continue-dev') {
+    lines.push(`    config: ${model}`);
+  } else {
+    lines.push(`    model: ${model}`);
+  }
+  if (type === 'opencode-go') lines.push('    command_style: prompt');
+  if (type === 'ollama') lines.push('    base_url: http://localhost:11434');
+  return lines.join('\n');
+}
+
+function renderPersona(persona: InitPersona, data: PersonaTemplate): string {
+  return [
+    `  ${persona}:`,
+    `    description: ${data.description}`,
+    '    system: |',
+    ...data.system.split('\n').map((line) => `      ${line}`),
+    '',
+  ].join('\n');
+}
+
+function renderReviewer(id: string, persona: InitPersona, provider: string): string {
+  return [
+    `  ${id}:`,
+    `    persona: ${persona}`,
+    `    provider: ${provider}`,
+    '',
+  ].join('\n');
+}
+
+async function loadInitPersonaTemplates(): Promise<Record<string, PersonaTemplate>> {
+  const path = fileURLToPath(new URL('../../quorum.yaml.example', import.meta.url));
+  const cfg = await loadConfigFromPath(path);
+  return Object.fromEntries(
+    Object.entries(cfg.personas).map(([id, persona]) => [
+      id,
+      { description: persona.description, system: persona.system },
+    ]),
+  );
 }
 
 function buildReviewInstruction(diff: string, files: string[]): string {

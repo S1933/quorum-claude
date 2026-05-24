@@ -141,6 +141,7 @@ Available slash commands:
 | `/quorum-review` | Run the default review pipeline on the current diff |
 | `/quorum-review <pipeline>` | Run a named pipeline |
 | `/quorum-config` | Show loaded config with secrets redacted |
+| `/quorum-init` | Create a starter `quorum.yaml` for the current project |
 
 For local plugin development:
 
@@ -180,7 +181,6 @@ Example:
 - Contradiction detection between reviewers
 - Per-reviewer trust, calibration, and weighted voting
 - External provider plugin loading and a provider-author guide
-- Additional providers such as Codex CLI, Gemini CLI, Aider, Continue.dev, and LiteLLM
 - Review history, interactive triage, and a web dashboard
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deeper design notes.
