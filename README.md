@@ -66,6 +66,10 @@ providers:
     type: codex-cli
     model: gpt-5-codex
 
+  gemini-local:
+    type: gemini-cli
+    model: gemini-2.5-pro
+
   opencode-local:
     type: opencode-go
     command_style: prompt
@@ -92,6 +96,10 @@ reviewers:
   sec-codex:
     persona: security
     provider: codex-local
+
+  sec-gemini:
+    persona: security
+    provider: gemini-local
 
   sec-ollama:
     persona: security

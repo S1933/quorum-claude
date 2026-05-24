@@ -24,6 +24,10 @@ providers:
     type: codex-cli
     model: gpt-5-codex
 
+  gemini-local:
+    type: gemini-cli
+    model: gemini-2.5-pro
+
   opencode-local:
     type: opencode-go
     command_style: prompt
@@ -59,6 +63,7 @@ reviewers:
   perf-opus: { persona: performance,  provider: openrouter-claude }
   arch-opus: { persona: architecture, provider: openrouter-claude }
   sec-codex: { persona: security,     provider: codex-local }
+  sec-gemini: { persona: security,    provider: gemini-local }
   sec-open:  { persona: security,     provider: opencode-local }
   sec-ollama: { persona: security,    provider: ollama-local }
 
