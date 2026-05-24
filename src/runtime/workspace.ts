@@ -36,7 +36,25 @@ async function refExists(root: string, ref: string): Promise<boolean> {
 }
 
 async function gitDiff(root: string, baseRef: string | undefined): Promise<string | undefined> {
-  const args = baseRef ? ['diff', `${baseRef}...HEAD`] : ['diff'];
+  const chunks: string[] = [];
+  if (baseRef) {
+    const branchDiff = await runGitDiff(root, ['diff', `${baseRef}...HEAD`]);
+    if (branchDiff === null) return undefined;
+    if (branchDiff) chunks.push(branchDiff);
+  }
+
+  const stagedDiff = await runGitDiff(root, ['diff', '--cached']);
+  if (stagedDiff === null) return undefined;
+  if (stagedDiff) chunks.push(stagedDiff);
+
+  const worktreeDiff = await runGitDiff(root, ['diff']);
+  if (worktreeDiff === null) return undefined;
+  if (worktreeDiff) chunks.push(worktreeDiff);
+
+  return chunks.length > 0 ? chunks.join('\n') : undefined;
+}
+
+async function runGitDiff(root: string, args: string[]): Promise<string | null> {
   const proc = Bun.spawn({
     cmd: ['git', ...args],
     cwd: root,
@@ -44,16 +62,22 @@ async function gitDiff(root: string, baseRef: string | undefined): Promise<strin
     stderr: 'pipe',
   });
   const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  if (code !== 0) return undefined;
-  return out.trim() ? out : undefined;
+  if (code !== 0) return null;
+  const trimmed = out.trim();
+  return trimmed ? trimmed : '';
 }
 
 function parseDiffFiles(diff: string | undefined): string[] {
   if (!diff) return [];
   const files = new Set<string>();
   for (const line of diff.split('\n')) {
-    const m = /^\+\+\+ b\/(.+)$/.exec(line);
-    if (m) files.add(m[1]!);
+    const git = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    if (git) {
+      files.add(git[2]!);
+      continue;
+    }
+    const added = /^\+\+\+ b\/(.+)$/.exec(line);
+    if (added) files.add(added[1]!);
   }
   return [...files];
 }

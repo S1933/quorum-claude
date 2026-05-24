@@ -30,6 +30,13 @@ export class ReviewerExecError extends QuorumError {
   }
 }
 
+export class ReviewerOutputError extends QuorumError {
+  override readonly name = 'ReviewerOutputError';
+  constructor(readonly reviewerId: string, message: string, cause?: unknown) {
+    super(`[${reviewerId}] ${message}`, cause);
+  }
+}
+
 export class CapabilityError extends QuorumError {
   override readonly name = 'CapabilityError';
 }

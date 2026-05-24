@@ -1,5 +1,6 @@
 import type { Finding, Severity, Category } from '../core/finding.ts';
 import { CATEGORIES, SEVERITIES } from '../core/finding.ts';
+import { ReviewerOutputError } from '../core/errors.ts';
 
 export const REVIEW_OUTPUT_INSTRUCTIONS = `Respond with a single JSON object — no prose, no markdown fence — matching this shape:
 {
@@ -29,29 +30,42 @@ interface RawFinding {
 
 export function parseFindings(raw: string, reviewerId: string): Finding[] {
   const text = stripFence(raw).trim();
-  if (!text) return [];
+  if (!text) throw new ReviewerOutputError(reviewerId, 'Reviewer returned empty output');
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  } catch (err) {
     const recovered = extractJsonObject(text);
-    if (!recovered) return [];
+    if (!recovered) {
+      throw new ReviewerOutputError(reviewerId, 'Reviewer output did not contain JSON', err);
+    }
     try {
       parsed = JSON.parse(recovered);
-    } catch {
-      return [];
+    } catch (recoveredErr) {
+      throw new ReviewerOutputError(
+        reviewerId,
+        'Reviewer output contained malformed JSON',
+        recoveredErr,
+      );
     }
   }
 
-  if (typeof parsed !== 'object' || parsed === null) return [];
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new ReviewerOutputError(reviewerId, 'Reviewer output JSON must be an object');
+  }
   const findingsRaw = (parsed as { findings?: unknown }).findings;
-  if (!Array.isArray(findingsRaw)) return [];
+  if (!Array.isArray(findingsRaw)) {
+    throw new ReviewerOutputError(reviewerId, 'Reviewer output must contain a findings array');
+  }
 
   const out: Finding[] = [];
-  for (const item of findingsRaw) {
+  for (const [idx, item] of findingsRaw.entries()) {
     const normalised = normaliseFinding(item as RawFinding, reviewerId);
-    if (normalised) out.push(normalised);
+    if (!normalised) {
+      throw new ReviewerOutputError(reviewerId, `Invalid finding at index ${idx}`);
+    }
+    out.push(normalised);
   }
   return out;
 }

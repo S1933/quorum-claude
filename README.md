@@ -119,6 +119,13 @@ bun quorum config
 
 Quorum ships as a Claude Code plugin. Once installed, two slash commands are available inside Claude Code:
 
+Install from the Claude Code plugin marketplace:
+
+```bash
+claude plugin marketplace add S1933/quorum-claude
+claude plugin install quorum@quorum-plugins
+```
+
 | Command | What it does |
 |---|---|
 | `/quorum-review` | Run the configured default pipeline on the current diff and render the consensus report inline |
