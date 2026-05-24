@@ -9,15 +9,6 @@ Provider-agnostic consensus review for AI-assisted code changes.
 
 Quorum runs several AI reviewers on the same git diff, compares their findings, then highlights issues multiple reviewers agree on. It can run as a Bun CLI or as a Claude Code plugin.
 
-## Why
-
-Single-model review is noisy. Quorum treats review like a small panel:
-
-- one diff
-- multiple personas
-- multiple providers or models
-- one consensus report
-
 ## How It Works
 
 1. Read the git diff and `quorum.yaml`.
@@ -25,14 +16,6 @@ Single-model review is noisy. Quorum treats review like a small panel:
 3. Collect structured findings from each reviewer.
 4. Group overlapping findings with the consensus engine.
 5. Render terminal, Markdown, or JSON output.
-
-## Core Model
-
-- Provider: OpenRouter, Claude Code, OpenCode Go, Ollama
-- Persona: security, performance, architecture, or custom prompt
-- Reviewer: persona + provider
-- Pipeline: ordered or parallel reviewers
-- Consensus: grouped matching findings
 
 ## Features
 
