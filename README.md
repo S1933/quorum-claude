@@ -9,24 +9,6 @@ Provider-agnostic consensus review for AI-assisted code changes.
 
 Quorum runs several AI reviewers on the same git diff, compares their findings, then highlights issues multiple reviewers agree on. It can run as a Bun CLI or as a Claude Code plugin.
 
-## How It Works
-
-```text
-git diff + quorum.yaml
-        |
-        v
-review pipeline
-        |
-        v
-reviewers + providers
-        |
-        v
-structured findings
-        |
-        v
-consensus report
-```
-
 ## Features
 
 - Portable personas independent from provider choice
