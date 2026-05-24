@@ -58,6 +58,11 @@ providers:
     api_key: env:OPENROUTER_API_KEY
     model: anthropic/claude-opus-4
 
+  openrouter-gpt:
+    type: openrouter
+    api_key: env:OPENROUTER_API_KEY
+    model: openai/gpt-5-codex
+
   claude-local:
     type: claude-code
     model: sonnet
@@ -97,6 +102,10 @@ reviewers:
     persona: security
     provider: openrouter-claude
 
+  sec-gpt:
+    persona: security
+    provider: openrouter-gpt
+
   sec-claude-local:
     persona: security
     provider: claude-local
@@ -117,6 +126,10 @@ reviewers:
     persona: security
     provider: kilo-local
 
+  sec-open:
+    persona: security
+    provider: opencode-local
+
   sec-ollama:
     persona: security
     provider: ollama-local
@@ -124,7 +137,7 @@ reviewers:
 pipelines:
   default:
     parallel: true
-    reviewers: [sec-opus, sec-claude-local, sec-ollama]
+    reviewers: [sec-opus, sec-gpt, sec-claude-local, sec-codex, sec-continue, sec-gemini, sec-kilo, sec-open, sec-ollama]
     consensus:
       strategy: overlap-v1
 ```
