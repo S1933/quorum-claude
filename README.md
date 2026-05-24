@@ -62,6 +62,10 @@ providers:
     type: claude-code
     model: sonnet
 
+  codex-local:
+    type: codex-cli
+    model: gpt-5-codex
+
   opencode-local:
     type: opencode-go
     command_style: prompt
@@ -84,6 +88,10 @@ reviewers:
   sec-claude-local:
     persona: security
     provider: claude-local
+
+  sec-codex:
+    persona: security
+    provider: codex-local
 
   sec-ollama:
     persona: security
