@@ -17,6 +17,22 @@ Quorum runs several AI reviewers on the same git diff, compares their findings, 
 4. Group overlapping findings with the consensus engine.
 5. Render terminal, Markdown, or JSON output.
 
+```text
+git diff + quorum.yaml
+        |
+        v
+review pipeline
+        |
+        v
+reviewers + providers
+        |
+        v
+structured findings
+        |
+        v
+consensus report
+```
+
 ## Features
 
 - Provider adapters: OpenRouter, local Claude Code, OpenCode Go, and Ollama
