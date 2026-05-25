@@ -79,7 +79,8 @@ describe('codex-cli provider', () => {
     const args = await Bun.file(argsFile).text();
     expect(args).toContain('exec\n');
     expect(args).toContain('--sandbox\nread-only');
-    expect(args).toContain('--ask-for-approval\nnever');
+    expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(args).not.toContain('--ask-for-approval');
     expect(args).toContain('--ephemeral');
     expect(args).toContain('--model\ngpt-5-codex');
   });
