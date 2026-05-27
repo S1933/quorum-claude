@@ -10,7 +10,9 @@
   "scripts": {
     "quorum": "bun run src/cli/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "yaml": "^2.5.0",
