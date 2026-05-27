@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { EventBus } from '../src/core/events.ts';
 import type { ReviewTask } from '../src/core/task.ts';
+import { createRuntime } from '../src/runtime/runtime.ts';
 import { claudeCodeFactory } from '../src/providers/claude-code/index.ts';
 
 const tmpRoots: string[] = [];
@@ -42,6 +43,33 @@ describe('claude-code provider', () => {
     expect(result.findings).toEqual([]);
     expect(result.rawOutput).toBe('{"findings":[]}');
     expect(tokenText(events)).toBe('{"findings":[]}');
+  });
+
+  test('rejects unsafe claude extra args', async () => {
+    const runtime = await createRuntime({
+      config: {
+        version: 1,
+        providers: {
+          'claude-local': {
+            type: 'claude-code',
+            model: 'sonnet',
+            extra_args: ['--dangerously-skip-permissions'],
+          },
+        },
+        personas: {
+          security: { description: 'Security', system: 'Review security.' },
+        },
+        reviewers: {
+          sec: { persona: 'security', provider: 'claude-local' },
+        },
+        pipelines: {
+          default: { parallel: true, reviewers: ['sec'] },
+        },
+      },
+      pluginCtx: { workspaceRoot: '.', env: {} },
+    });
+
+    await expect(runtime.resolveProvider('claude-local')).rejects.toThrow('extra_args.0');
   });
 });
 

@@ -8,7 +8,7 @@ export const OpenCodeGoConfigSchema = z
     command_style: z.enum(['prompt', 'run']).default('prompt'),
     output_format: z.enum(['text', 'json']).default('text'),
     quiet: z.boolean().default(true),
-    extra_args: z.array(z.string()).default([]),
+    extra_args: z.array(z.never()).default([]),
     cwd: z.string().optional(),
     timeout_ms: z.number().int().positive().default(120_000),
   })

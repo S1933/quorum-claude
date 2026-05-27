@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { EventBus } from '../src/core/events.ts';
 import type { ReviewTask } from '../src/core/task.ts';
+import { createRuntime } from '../src/runtime/runtime.ts';
 import { openCodeGoFactory } from '../src/providers/opencode-go/index.ts';
 
 const tmpRoots: string[] = [];
@@ -137,6 +138,32 @@ describe('opencode-go provider', () => {
       signal: new AbortController().signal,
       workspace: { root },
     })).rejects.toThrow('opencode timed out after 10ms');
+  });
+
+  test('rejects unsafe opencode extra args', async () => {
+    const runtime = await createRuntime({
+      config: {
+        version: 1,
+        providers: {
+          'opencode-local': {
+            type: 'opencode-go',
+            extra_args: ['--trust-all'],
+          },
+        },
+        personas: {
+          security: { description: 'Security', system: 'Review security.' },
+        },
+        reviewers: {
+          sec: { persona: 'security', provider: 'opencode-local' },
+        },
+        pipelines: {
+          default: { parallel: true, reviewers: ['sec'] },
+        },
+      },
+      pluginCtx: { workspaceRoot: '.', env: {} },
+    });
+
+    await expect(runtime.resolveProvider('opencode-local')).rejects.toThrow('extra_args.0');
   });
 });
 
