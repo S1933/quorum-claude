@@ -48,14 +48,14 @@ export class PipelineExecutor {
     const errors: ReviewerError[] = [];
 
     try {
-      const runOne = async (rev: BoundReviewer): Promise<void> => {
+      const runOne = async (rev: BoundReviewer, index: number): Promise<void> => {
         bus.emit({ type: 'reviewer.started', reviewerId: rev.id });
         try {
           const result = await rev.run(
             { id: `${taskId}:${rev.id}`, instruction, workspace },
             { bus, signal: controller.signal, workspace },
           );
-          reviews.push(result);
+          reviews[index] = result;
           bus.emit({ type: 'reviewer.finished', reviewerId: rev.id, result });
         } catch (err) {
           const message =
@@ -65,17 +65,17 @@ export class PipelineExecutor {
               ? err
               : new ReviewerExecError(rev.id, message, err);
           const reviewerError: ReviewerError = { reviewerId: rev.id, message: wrapped.message, cause: err };
-          errors.push(reviewerError);
+          errors[index] = reviewerError;
           bus.emit({ type: 'reviewer.failed', reviewerId: rev.id, error: reviewerError });
         }
       };
 
       if (pipeline.parallel) {
-        await Promise.all(reviewers.map(runOne));
+        await Promise.all(reviewers.map((r, i) => runOne(r, i)));
       } else {
-        for (const rev of reviewers) {
+        for (let i = 0; i < reviewers.length; i++) {
           if (controller.signal.aborted) break;
-          await runOne(rev);
+          await runOne(reviewers[i]!, i);
         }
       }
     } finally {
@@ -83,14 +83,14 @@ export class PipelineExecutor {
       if (signal) signal.removeEventListener('abort', onParentAbort);
     }
 
-    const consensusResult = computeConsensus(reviews, pipeline, consensus);
+    const consensusResult = computeConsensus(reviews.filter(Boolean), pipeline, consensus);
 
     const result: PipelineResult = {
       pipelineId: pipeline.id,
-      reviews,
+      reviews: reviews.filter(Boolean),
       consensus: consensusResult,
       durationMs: Date.now() - started,
-      errors,
+      errors: errors.filter(Boolean),
     };
     bus.emit({ type: 'pipeline.finished', result });
     if (timedOut) {
