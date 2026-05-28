@@ -247,6 +247,8 @@ function reviewerId(persona: string, provider?: InitProvider): string {
       return 'sec-reviewer';
     case 'backend-senior':
       return 'backend-reviewer';
+    case 'frontend-senior':
+      return 'frontend-reviewer';
     case 'architecture':
       return 'arch-reviewer';
     case 'performance':

@@ -173,12 +173,14 @@ describe('cli', () => {
     expect(Object.keys(cfg.personas)).toEqual([
       'security',
       'backend-senior',
+      'frontend-senior',
       'architecture',
       'performance',
     ]);
     expect(cfg.pipelines.default?.reviewers).toEqual([
       'sec-reviewer',
       'backend-reviewer',
+      'frontend-reviewer',
       'arch-reviewer',
       'perf-reviewer',
     ]);
@@ -328,7 +330,10 @@ describe('cli', () => {
     const io = captureIo();
     const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
     const configPath = join(tmp, 'quorum.yaml');
-    const selections = [['claude-code'], ['security', 'backend-senior', 'architecture', 'performance']];
+    const selections = [
+      ['claude-code'],
+      ['security', 'backend-senior', 'frontend-senior', 'architecture', 'performance'],
+    ];
 
     const code = await main(
       ['init', '--config', configPath],
@@ -348,6 +353,7 @@ describe('cli', () => {
     expect(Object.keys(cfg.personas)).toEqual([
       'security',
       'backend-senior',
+      'frontend-senior',
       'architecture',
       'performance',
     ]);
@@ -406,6 +412,7 @@ describe('cli', () => {
 
     expect(code).toBe(0);
     expect(io.stdoutText()).toContain('security\tAdversarial security review');
+    expect(io.stdoutText()).toContain('frontend-senior\tSenior frontend engineering review');
     expect(io.stdoutText()).toContain('performance\tPerformance and scalability review');
     expect(io.stderrText()).toBe('');
   });
@@ -867,6 +874,10 @@ function personaTemplates(): Record<string, { description: string; system: strin
     'backend-senior': {
       description: 'Senior backend engineering review',
       system: 'Template backend prompt.',
+    },
+    'frontend-senior': {
+      description: 'Senior frontend engineering review',
+      system: 'Template frontend prompt.',
     },
     architecture: {
       description: 'Architecture and maintainability review',

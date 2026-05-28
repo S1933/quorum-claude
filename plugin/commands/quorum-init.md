@@ -32,6 +32,7 @@ Steps:
 7. If the parsed argv does not include `--personas`, ask the user which personas to enable before running `quorum init`, using checked items, numbers, ids, or `all`. Supported personas:
    - `security`
    - `backend-senior`
+   - `frontend-senior`
    - `architecture`
    - `performance`
 8. Parse the user's persona reply into a comma-separated persona id list. If they replied with `all`, use every supported persona. Add it to the argv as `--personas <comma-separated-persona-ids>` before continuing.

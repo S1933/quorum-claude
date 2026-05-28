@@ -368,7 +368,7 @@ quorum/
 │   │   └── cursor-agent/          # subprocess provider
 │   ├── reviewers/
 │   │   ├── reviewer.ts     # binding logic
-│   │   └── builtin/        # ships with security/performance/architecture personas
+│   │   └── builtin/        # ships with security/backend/frontend/performance/architecture personas
 │   ├── pipelines/
 │   │   ├── executor.ts
 │   │   └── parallel.ts
