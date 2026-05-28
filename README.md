@@ -101,6 +101,16 @@ pipelines:
 
 For the ready-to-copy starter config, see [`quorum.yaml.example`](quorum.yaml.example).
 
+Available personas in the example config:
+
+| Persona | Description |
+| --- | --- |
+| `security` | Adversarial security review |
+| `backend-senior` | Senior backend engineering review |
+| `frontend-senior` | Senior frontend engineering review |
+| `architecture` | Architecture and maintainability review |
+| `performance` | Performance and scalability review |
+
 ## Use The CLI
 
 ```bash
