@@ -2,7 +2,8 @@ import type { Persona } from '../core/persona.ts';
 import type { Provider, ExecCtx } from '../core/provider.ts';
 import type { ReviewTask, ReviewResult, ModelConfig } from '../core/task.ts';
 import type { ReviewerRef, ReviewerOverrides } from '../core/pipeline.ts';
-import { CapabilityError } from '../core/errors.ts';
+import { CapabilityError, ReviewerOutputError } from '../core/errors.ts';
+import { RETRY_REMINDER } from './output.ts';
 
 export interface BoundReviewer {
   id: string;
@@ -44,7 +45,20 @@ export function bindReviewer(
       const execCtx: ExecCtx = modelOverride
         ? { ...ctx, modelOverride, reviewerId: ref.id }
         : { ...ctx, reviewerId: ref.id };
-      return provider.review!(fullTask, execCtx);
+      try {
+        return await provider.review!(fullTask, execCtx);
+      } catch (err) {
+        // The model occasionally answers in prose instead of the JSON envelope
+        // (seen with high-thinking models that narrate a clean pass). Retry once
+        // with a corrective reminder appended — every provider places the
+        // instruction last, so the reminder is the final thing the model sees.
+        if (!(err instanceof ReviewerOutputError) || execCtx.signal.aborted) throw err;
+        const retryTask: ReviewTask = {
+          ...fullTask,
+          instruction: `${fullTask.instruction}\n\n${RETRY_REMINDER}`,
+        };
+        return await provider.review!(retryTask, execCtx);
+      }
     },
   };
 }

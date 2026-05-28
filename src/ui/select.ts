@@ -33,7 +33,14 @@ export async function selectManyCheckbox(
 ): Promise<string[]> {
   if (choices.length === 0) return [];
   if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
-    const answer = await promptQuestion(`${question}: `, io);
+    io.stdout.write(`${question}\n`);
+    io.stdout.write('Select one or more choices by number or id, comma-separated. Use "all" for every choice.\n');
+    choices.forEach((choice, index) => {
+      const checked = defaults.includes(choice.value) ? 'x' : ' ';
+      const hint = choice.hint ? ` - ${choice.hint}` : '';
+      io.stdout.write(`  [${checked}] ${index + 1}. ${choice.label}${hint}\n`);
+    });
+    const answer = await promptQuestion('Choices: ', io);
     return answer.trim() ? parseSelection(answer, choices.map((choice) => choice.value)) : defaults;
   }
 

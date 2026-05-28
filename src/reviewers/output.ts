@@ -2,7 +2,7 @@ import type { Finding, Severity, Category } from '../core/finding.ts';
 import { CATEGORIES, SEVERITIES } from '../core/finding.ts';
 import { ReviewerOutputError } from '../core/errors.ts';
 
-export const REVIEW_OUTPUT_INSTRUCTIONS = `Respond with a single JSON object — no prose, no markdown fence — matching this shape:
+export const REVIEW_OUTPUT_INSTRUCTIONS = `Respond with a single JSON object — no prose, no preamble, no markdown fence, no thinking written outside the object — matching this shape:
 {
   "findings": [
     {
@@ -16,7 +16,12 @@ export const REVIEW_OUTPUT_INSTRUCTIONS = `Respond with a single JSON object —
     }
   ]
 }
-If you find no issues, return {"findings": []}. Do not invent files or line numbers — only cite what you were shown.`;
+Do not invent files or line numbers — only cite what you were shown.
+This applies even when the code looks clean: if you find no issues, your entire reply must be exactly {"findings": []} — never a sentence such as "No issues found". The first character you output must be "{" and the last must be "}".`;
+
+// Appended to the prompt on a single automatic retry when a reviewer's first
+// reply could not be parsed as the JSON envelope above (e.g. it answered in prose).
+export const RETRY_REMINDER = `Your previous reply could not be parsed: it did not contain the required JSON object. Reply again with ONLY the JSON object described above — start with "{", end with "}", and include nothing else. If there are no issues, reply with exactly {"findings": []}.`;
 
 interface RawFinding {
   file?: unknown;

@@ -12,7 +12,7 @@ import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { BoundReviewer } from '../src/reviewers/reviewer.ts';
 import { main, redactConfig, buildReviewInstruction, buildSafeFence, resolveDiffLimits, type CliDeps, type CliIo } from '../src/cli/index.ts';
 import { loadConfigFromPath } from '../src/config/loader.ts';
-import { createInitConfig } from '../src/config/init.ts';
+import { createInitConfig, INIT_PROVIDERS } from '../src/config/init.ts';
 import { InMemoryEventBus } from '../src/runtime/bus.ts';
 import type { Runtime } from '../src/runtime/runtime.ts';
 
@@ -289,13 +289,15 @@ describe('cli', () => {
     const tmp = await mkdtemp(join(tmpdir(), 'quorum-cli-init-test-'));
     const configPath = join(tmp, 'quorum.yaml');
     const selections = [['opencode-go'], ['security', 'performance']];
+    const selectCalls: Array<{ question: string; values: string[] }> = [];
 
     const code = await main(
       ['init', '--config', configPath],
       deps({
         inferRepoRoot: async () => tmp,
         isInteractive: () => true,
-        selectMany: async (question) => {
+        selectMany: async (question, choices) => {
+          selectCalls.push({ question, values: choices.map((choice) => choice.value) });
           io.stdout.write(`${question}\n`);
           return selections.shift() ?? [];
         },
@@ -305,6 +307,10 @@ describe('cli', () => {
     );
 
     expect(code).toBe(0);
+    expect(selectCalls[0]).toEqual({
+      question: 'Select provider(s) to configure first',
+      values: [...INIT_PROVIDERS],
+    });
     expect(io.stdoutText()).toContain('Select provider(s) to configure first');
     expect(io.stdoutText()).toContain('Select persona(s) to enable');
     expect(io.stdoutText()).toContain('Providers: opencode-go');
