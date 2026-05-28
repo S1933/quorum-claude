@@ -22,6 +22,30 @@ Quorum runs several AI reviewers on the same git diff, compares their findings, 
 - Render live terminal progress, Markdown reports, or machine-readable JSON for scripts and CI
 - Use Quorum from the CLI or directly inside Claude Code with slash commands
 
+## Review Workflow
+
+```text
+changes
+   |
+   v
+config
+   |
+   v
+pipeline
+   |
+   v
+reviewers
+   |
+   v
+findings
+   |
+   v
+consensus
+   |
+   v
+report
+```
+
 ## Supported Providers
 
 | Status | Provider | Type |
