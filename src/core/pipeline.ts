@@ -27,6 +27,7 @@ export interface Pipeline {
   reviewers: string[];
   consensus?: ConsensusConfig;
   timeoutMs?: number;
+  maxConcurrency?: number;
 }
 
 export interface ReviewerError {

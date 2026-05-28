@@ -133,8 +133,38 @@ function stripFence(s: string): string {
 }
 
 function extractJsonObject(s: string): string | null {
-  const first = s.indexOf('{');
-  const last = s.lastIndexOf('}');
-  if (first === -1 || last <= first) return null;
-  return s.slice(first, last + 1);
+  let searchFrom = 0;
+  while (searchFrom < s.length) {
+    const candidate = extractBalancedBraces(s, searchFrom);
+    if (!candidate) return null;
+    try {
+      JSON.parse(candidate.text);
+      return candidate.text;
+    } catch {
+      searchFrom = candidate.startIndex + 1;
+    }
+  }
+  return null;
+}
+
+function extractBalancedBraces(s: string, from: number): { text: string; startIndex: number } | null {
+  const start = s.indexOf('{', from);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i]!;
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return { text: s.slice(start, i + 1), startIndex: start };
+    }
+  }
+  return null;
 }

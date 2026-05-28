@@ -2,10 +2,9 @@ import type { Provider, ProviderCapabilities, ExecCtx } from '../../core/provide
 import type { ReviewTask, ReviewResult } from '../../core/task.ts';
 import type { ProviderFactory } from '../registry.ts';
 import type { PluginCtx } from '../../runtime/plugin.ts';
-import { ProviderRuntimeError } from '../../core/errors.ts';
 import { ClaudeCodeConfigSchema, type ClaudeCodeConfig } from './schema.ts';
-import { parseFindings, REVIEW_OUTPUT_INSTRUCTIONS } from '../../reviewers/output.ts';
-import { readPreviewedStdout } from '../subprocess.ts';
+import { REVIEW_OUTPUT_INSTRUCTIONS } from '../../reviewers/output.ts';
+import { runSubprocess, buildSubprocessReviewResult } from '../subprocess.ts';
 
 const PROVIDER_TYPE = 'claude-code';
 
@@ -30,98 +29,25 @@ class ClaudeCodeProvider implements Provider {
     };
   }
 
-  private async runOnce(
-    prompt: string,
-    system: string | null,
-    ctx: ExecCtx,
-    reviewerId: string,
-  ): Promise<string> {
-    const args = ['--print', '--model', this.cfg.model, ...this.cfg.extra_args];
-    if (system) args.push('--append-system-prompt', system);
-
-    const cwd = this.cfg.cwd ?? this.pluginCtx.workspaceRoot;
-
-    const proc = Bun.spawn({
-      cmd: [this.cfg.binary, ...args],
-      cwd,
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const writer = (proc.stdin as unknown as { write: (s: string) => void; end: () => void });
-    writer.write(prompt);
-    writer.end();
-
-    const onAbort = () => proc.kill();
-    if (ctx.signal.aborted) {
-      proc.kill();
-      throw new DOMException('Aborted', 'AbortError');
-    }
-    ctx.signal.addEventListener('abort', onAbort, { once: true });
-
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill();
-    }, this.cfg.timeout_ms);
-
-    try {
-      const [stdout, stderr, exitCode] = await Promise.all([
-        readPreviewedStdout(proc.stdout, {
-          onToken: (text) => {
-            ctx.bus.emit({
-              type: 'reviewer.event',
-              reviewerId,
-              event: { type: 'token', text },
-            });
-          },
-        }),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]);
-
-      if (timedOut) {
-        throw new ProviderRuntimeError(
-          this.id,
-          `claude timed out after ${this.cfg.timeout_ms}ms`,
-        );
-      }
-
-      if (exitCode !== 0) {
-        throw new ProviderRuntimeError(
-          this.id,
-          `claude exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
-        );
-      }
-      return stdout;
-    } finally {
-      clearTimeout(timer);
-      ctx.signal.removeEventListener('abort', onAbort);
-    }
-  }
-
   async review(task: ReviewTask, ctx: ExecCtx): Promise<ReviewResult> {
     const started = Date.now();
     const system = `${task.systemPrompt}\n\n${REVIEW_OUTPUT_INSTRUCTIONS}`;
-    const raw = await this.runOnce(task.instruction, system, ctx, task.reviewerId);
-    const findings = parseFindings(raw, task.reviewerId);
+    const args = ['--print', '--model', this.cfg.model, ...this.cfg.extra_args, '--append-system-prompt', system];
 
-    for (const finding of findings) {
-      ctx.bus.emit({
-        type: 'reviewer.event',
-        reviewerId: task.reviewerId,
-        event: { type: 'finding', finding },
-      });
-    }
-
-    return {
-      taskId: task.id,
+    const raw = await runSubprocess({
+      providerId: this.id,
+      providerLabel: 'claude',
       reviewerId: task.reviewerId,
-      findings,
-      rawOutput: raw,
-      durationMs: Date.now() - started,
-    };
+      binary: this.cfg.binary,
+      args,
+      cwd: this.cfg.cwd ?? this.pluginCtx.workspaceRoot,
+      stdin: task.instruction,
+      timeoutMs: this.cfg.timeout_ms,
+      signal: ctx.signal,
+      bus: ctx.bus,
+    });
+
+    return buildSubprocessReviewResult(task, raw, started, ctx.bus);
   }
 }
 

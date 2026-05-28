@@ -13,7 +13,7 @@ export const overlapV1: ConsensusStrategy = {
 
     let nextId = 1;
     for (const finding of all) {
-      const target = groups.find((g) => matches(g.representative, finding));
+      const target = groups.find((g) => g.members.some((m) => matches(m, finding)));
       if (target) {
         target.members.push(finding);
         if (!target.reviewers.includes(finding.reviewer)) {

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkspaceInfo } from '../core/task.ts';
-import { ProviderRuntimeError } from '../core/errors.ts';
+import { ProviderRuntimeError, DiffBudgetError } from '../core/errors.ts';
 
 export interface WorkspaceProbeOptions {
   root: string;
@@ -143,6 +143,106 @@ async function formatUntrackedFile(root: string, file: string): Promise<string> 
 function isProbablyText(data: Uint8Array): boolean {
   if (data.length === 0) return true;
   return !data.includes(0);
+}
+
+export interface DiffLimits {
+  maxDiffBytes?: number;
+  includeFiles?: string[];
+  excludeFiles?: string[];
+}
+
+export function applyDiffLimits(workspace: WorkspaceInfo, limits: DiffLimits): WorkspaceInfo {
+  let ws = workspace;
+  if (limits.includeFiles?.length || limits.excludeFiles?.length) {
+    ws = filterDiffByFiles(ws, limits.includeFiles, limits.excludeFiles);
+  }
+  if (limits.maxDiffBytes !== undefined && ws.diff) {
+    enforceDiffBudget(ws.diff, limits.maxDiffBytes, ws.files ?? []);
+  }
+  return ws;
+}
+
+export function filterDiffByFiles(
+  workspace: WorkspaceInfo,
+  include?: string[],
+  exclude?: string[],
+): WorkspaceInfo {
+  if (!workspace.diff) return workspace;
+  if (!include?.length && !exclude?.length) return workspace;
+
+  const sections = splitDiffSections(workspace.diff);
+  const kept = sections.filter(({ file }) => {
+    if (include?.length && !include.some((p) => globMatch(p, file))) return false;
+    if (exclude?.length && exclude.some((p) => globMatch(p, file))) return false;
+    return true;
+  });
+
+  const joined = kept.map((s) => s.raw).join('\n');
+  const files = kept.map((s) => s.file);
+  const { diff: _stripped, ...rest } = workspace;
+  const out: WorkspaceInfo = { ...rest, files };
+  if (joined) out.diff = joined;
+  return out;
+}
+
+export function enforceDiffBudget(diff: string, maxBytes: number, files: string[]): void {
+  const actual = Buffer.byteLength(diff, 'utf8');
+  if (actual > maxBytes) {
+    throw new DiffBudgetError(actual, maxBytes, files.length);
+  }
+}
+
+interface DiffSection {
+  file: string;
+  raw: string;
+}
+
+function splitDiffSections(diff: string): DiffSection[] {
+  const sections: DiffSection[] = [];
+  const headerRe = /^diff --git a\/(.+) b\/(.+)$/;
+  const lines = diff.split('\n');
+  let current: { file: string; startIdx: number } | undefined;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = headerRe.exec(lines[i]!);
+    if (m) {
+      if (current) {
+        sections.push({ file: current.file, raw: lines.slice(current.startIdx, i).join('\n') });
+      }
+      current = { file: m[2]!, startIdx: i };
+    }
+  }
+  if (current) {
+    sections.push({ file: current.file, raw: lines.slice(current.startIdx).join('\n') });
+  }
+  return sections;
+}
+
+export function globMatch(pattern: string, path: string): boolean {
+  const regex = globToRegex(pattern);
+  return regex.test(path);
+}
+
+function globToRegex(pattern: string): RegExp {
+  let src = '';
+  let i = 0;
+  while (i < pattern.length) {
+    const ch = pattern[i]!;
+    if (ch === '*' && pattern[i + 1] === '*') {
+      src += pattern[i + 2] === '/' ? '(?:.+/)?' : '.*';
+      i += pattern[i + 2] === '/' ? 3 : 2;
+    } else if (ch === '*') {
+      src += '[^/]*';
+      i++;
+    } else if (ch === '?') {
+      src += '[^/]';
+      i++;
+    } else {
+      src += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      i++;
+    }
+  }
+  return new RegExp(`^${src}$`);
 }
 
 export async function inferRepoRoot(start: string = process.cwd()): Promise<string> {

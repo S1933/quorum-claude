@@ -11,6 +11,8 @@ export const OpenRouterConfigSchema = z
     top_p: z.number().min(0).max(1).optional(),
     referer: z.string().optional(),
     title: z.string().optional(),
+    maxRetries: z.number().int().nonnegative().default(3),
+    retryBaseMs: z.number().int().positive().default(1000),
   })
   .strict();
 

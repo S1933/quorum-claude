@@ -71,7 +71,12 @@ export class PipelineExecutor {
       };
 
       if (pipeline.parallel) {
-        await Promise.all(reviewers.map((r, i) => runOne(r, i)));
+        const limit = pipeline.maxConcurrency;
+        if (limit && limit < reviewers.length) {
+          await runWithConcurrencyLimit(reviewers, limit, runOne);
+        } else {
+          await Promise.all(reviewers.map((r, i) => runOne(r, i)));
+        }
       } else {
         for (let i = 0; i < reviewers.length; i++) {
           if (controller.signal.aborted) break;
@@ -98,6 +103,21 @@ export class PipelineExecutor {
     }
     return result;
   }
+}
+
+async function runWithConcurrencyLimit(
+  reviewers: BoundReviewer[],
+  limit: number,
+  runOne: (rev: BoundReviewer, index: number) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < reviewers.length) {
+      const idx = next++;
+      await runOne(reviewers[idx]!, idx);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, reviewers.length) }, () => worker()));
 }
 
 function computeConsensus(

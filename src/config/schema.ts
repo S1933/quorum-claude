@@ -38,6 +38,7 @@ export const PipelineConfigSchema = z
     reviewers: z.array(NonEmpty).min(1),
     consensus: ConsensusConfigSchema.optional(),
     timeoutMs: z.number().int().positive().optional(),
+    maxConcurrency: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -50,6 +51,9 @@ export const ProviderConfigSchema = z
 export const DefaultsSchema = z
   .object({
     pipeline: NonEmpty.optional(),
+    maxDiffBytes: z.number().int().positive().optional(),
+    includeFiles: z.array(z.string().min(1)).optional(),
+    excludeFiles: z.array(z.string().min(1)).optional(),
   })
   .strict();
 

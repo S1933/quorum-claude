@@ -64,6 +64,21 @@ describe('overlap-v1', () => {
     expect(result.unique).toEqual([security, correctness]);
   });
 
+  test('groups findings regardless of iteration order via member matching', () => {
+    const a = finding({ reviewer: 'r-a', lineStart: 10, lineEnd: 12, severity: 'low', title: 'A' });
+    const b = finding({ reviewer: 'r-b', lineStart: 12, lineEnd: 14, severity: 'critical', title: 'B' });
+    const c = finding({ reviewer: 'r-c', lineStart: 10, lineEnd: 11, severity: 'medium', title: 'C' });
+
+    const result = overlapV1.aggregate(
+      [review('r-a', [a]), review('r-b', [b]), review('r-c', [c])],
+      { strategy: 'overlap-v1' },
+    );
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]?.members).toHaveLength(3);
+    expect(result.groups[0]?.reviewers.sort()).toEqual(['r-a', 'r-b', 'r-c']);
+  });
+
   test('uses the highest severity finding as the group representative', () => {
     const low = finding({
       reviewer: 'perf-a',

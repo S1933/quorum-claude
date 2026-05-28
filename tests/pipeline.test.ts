@@ -83,6 +83,58 @@ describe('PipelineExecutor', () => {
     expect(order).toEqual(['a:start', 'a:end', 'b:start', 'b:end']);
   });
 
+  test('limits parallel concurrency when maxConcurrency is set', async () => {
+    let active = 0;
+    let maxActive = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+
+    const makeReviewer = (id: string) =>
+      reviewer(id, async () => {
+        active++;
+        if (active > maxActive) maxActive = active;
+        await gate;
+        active--;
+        return reviewResult(id);
+      });
+
+    const run = runPipeline({
+      parallel: true,
+      maxConcurrency: 2,
+      reviewers: ['a', 'b', 'c', 'd'],
+      boundReviewers: ['a', 'b', 'c', 'd'].map(makeReviewer),
+    });
+
+    await waitFor(() => maxActive >= 2);
+    await Bun.sleep(20);
+    expect(maxActive).toBe(2);
+    release();
+    const result = await run;
+    expect(result.reviews).toHaveLength(4);
+  });
+
+  test('maxConcurrency greater than reviewer count behaves like unlimited', async () => {
+    const started: string[] = [];
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+
+    const run = runPipeline({
+      parallel: true,
+      maxConcurrency: 10,
+      reviewers: ['a', 'b'],
+      boundReviewers: [
+        reviewer('a', async () => { started.push('a'); await gate; return reviewResult('a'); }),
+        reviewer('b', async () => { started.push('b'); await gate; return reviewResult('b'); }),
+      ],
+    });
+
+    await waitFor(() => started.length === 2);
+    expect(started).toEqual(['a', 'b']);
+    release();
+    const result = await run;
+    expect(result.reviews).toHaveLength(2);
+  });
+
   test('aborts in-flight reviewers on timeout and emits timeout event', async () => {
     const events: QuorumEvent[] = [];
     const bus = new InMemoryEventBus();
@@ -113,6 +165,7 @@ async function runPipeline(opts: {
   reviewers: string[];
   boundReviewers: BoundReviewer[];
   timeoutMs?: number;
+  maxConcurrency?: number;
   bus?: InMemoryEventBus;
 }) {
   const pipeline: Pipeline = {
@@ -120,6 +173,7 @@ async function runPipeline(opts: {
     parallel: opts.parallel,
     reviewers: opts.reviewers,
     ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
+    ...(opts.maxConcurrency ? { maxConcurrency: opts.maxConcurrency } : {}),
   };
   const consensus = new ConsensusRegistry();
   consensus.register(overlapV1);

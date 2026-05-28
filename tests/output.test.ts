@@ -78,6 +78,33 @@ describe('parseFindings', () => {
     expect(finding?.category).toBe('correctness');
   });
 
+  test('recovers JSON when prose contains braces before the JSON object', () => {
+    const output = 'Here is my analysis (see lines {1-5} above):\n{"findings":[]}';
+    const findings = parseFindings(output, 'rev-a');
+    expect(findings).toEqual([]);
+  });
+
+  test('recovers JSON when prose contains braces after the JSON object', () => {
+    const output = '{"findings":[]}\nNote: the function doStuff() { return 1; } is fine.';
+    const findings = parseFindings(output, 'rev-a');
+    expect(findings).toEqual([]);
+  });
+
+  test('recovers JSON from output with multiple brace groups', () => {
+    const output = 'Here is {stuff} and then {"findings":[{"file":"a.ts","lineStart":1,"severity":"low","category":"style","title":"ok","body":"fine"}]} and more {stuff}';
+    const findings = parseFindings(output, 'rev-a');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.file).toBe('a.ts');
+  });
+
+  test('balanced-brace scanner handles escaped quotes inside JSON strings', () => {
+    const json = '{"findings":[{"file":"a\\"b.ts","lineStart":1,"severity":"low","category":"style","title":"has \\"quotes\\"","body":"ok"}]}';
+    const output = `Some prose before. ${json} And after.`;
+    const findings = parseFindings(output, 'rev-a');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.file).toBe('a"b.ts');
+  });
+
   test('accepts snake_case line fields and appends recommendations', () => {
     const [finding] = parseFindings(
       JSON.stringify({

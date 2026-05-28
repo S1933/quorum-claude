@@ -2,9 +2,8 @@ import type { Provider, ProviderCapabilities, ExecCtx } from '../../core/provide
 import type { ReviewTask, ReviewResult } from '../../core/task.ts';
 import type { ProviderFactory } from '../registry.ts';
 import type { PluginCtx } from '../../runtime/plugin.ts';
-import { ProviderRuntimeError } from '../../core/errors.ts';
-import { parseFindings, REVIEW_OUTPUT_INSTRUCTIONS } from '../../reviewers/output.ts';
-import { readPreviewedStdout } from '../subprocess.ts';
+import { REVIEW_OUTPUT_INSTRUCTIONS } from '../../reviewers/output.ts';
+import { runSubprocess, buildSubprocessReviewResult } from '../subprocess.ts';
 import { CodexCliConfigSchema, type CodexCliConfig } from './schema.ts';
 
 const PROVIDER_TYPE = 'codex-cli';
@@ -30,7 +29,7 @@ class CodexCliProvider implements Provider {
     };
   }
 
-  private args(ctx: ExecCtx, cwd: string): string[] {
+  private buildArgs(ctx: ExecCtx, cwd: string): string[] {
     const model = ctx.modelOverride?.model ?? this.cfg.model;
     const args = [
       'exec',
@@ -43,7 +42,6 @@ class CodexCliProvider implements Provider {
       ...this.cfg.extra_args,
     ];
 
-    // Codex ≥ 0.133.0 removed --ask-for-approval; use the bypass flag for non-interactive runs
     if (this.cfg.approval_policy === 'never') {
       args.push('--dangerously-bypass-approvals-and-sandbox');
     }
@@ -53,90 +51,25 @@ class CodexCliProvider implements Provider {
     return args;
   }
 
-  private async runOnce(prompt: string, ctx: ExecCtx, reviewerId: string): Promise<string> {
-    const cwd = this.cfg.cwd ?? this.pluginCtx.workspaceRoot;
-    const proc = Bun.spawn({
-      cmd: [this.cfg.binary, ...this.args(ctx, cwd)],
-      cwd,
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const writer = proc.stdin as unknown as { write: (s: string) => void; end: () => void };
-    writer.write(prompt);
-    writer.end();
-
-    const onAbort = () => proc.kill();
-    ctx.signal.addEventListener('abort', onAbort, { once: true });
-    if (ctx.signal.aborted) {
-      onAbort();
-      throw new DOMException('Aborted', 'AbortError');
-    }
-
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill();
-    }, this.cfg.timeout_ms);
-
-    try {
-      const [stdout, stderr, exitCode] = await Promise.all([
-        readPreviewedStdout(proc.stdout, {
-          onToken: (text) => {
-            ctx.bus.emit({
-              type: 'reviewer.event',
-              reviewerId,
-              event: { type: 'token', text },
-            });
-          },
-        }),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]);
-
-      if (timedOut) {
-        throw new ProviderRuntimeError(this.id, `codex timed out after ${this.cfg.timeout_ms}ms`);
-      }
-
-      if (exitCode !== 0) {
-        throw new ProviderRuntimeError(
-          this.id,
-          `codex exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
-        );
-      }
-      return stdout.trim();
-    } finally {
-      clearTimeout(timer);
-      ctx.signal.removeEventListener('abort', onAbort);
-    }
-  }
-
   async review(task: ReviewTask, ctx: ExecCtx): Promise<ReviewResult> {
     const started = Date.now();
-    const prompt = [
-      task.systemPrompt,
-      REVIEW_OUTPUT_INSTRUCTIONS,
-      task.instruction,
-    ].join('\n\n');
-    const raw = await this.runOnce(prompt, ctx, task.reviewerId);
-    const findings = parseFindings(raw, task.reviewerId);
+    const cwd = this.cfg.cwd ?? this.pluginCtx.workspaceRoot;
+    const prompt = [task.systemPrompt, REVIEW_OUTPUT_INSTRUCTIONS, task.instruction].join('\n\n');
 
-    for (const finding of findings) {
-      ctx.bus.emit({
-        type: 'reviewer.event',
-        reviewerId: task.reviewerId,
-        event: { type: 'finding', finding },
-      });
-    }
-
-    return {
-      taskId: task.id,
+    const raw = await runSubprocess({
+      providerId: this.id,
+      providerLabel: 'codex',
       reviewerId: task.reviewerId,
-      findings,
-      rawOutput: raw,
-      durationMs: Date.now() - started,
-    };
+      binary: this.cfg.binary,
+      args: this.buildArgs(ctx, cwd),
+      cwd,
+      stdin: prompt,
+      timeoutMs: this.cfg.timeout_ms,
+      signal: ctx.signal,
+      bus: ctx.bus,
+    });
+
+    return buildSubprocessReviewResult(task, raw.trim(), started, ctx.bus);
   }
 }
 
