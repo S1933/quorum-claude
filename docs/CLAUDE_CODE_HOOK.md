@@ -8,7 +8,7 @@ Add this hook to your Claude Code settings to automatically run Quorum review be
 
 ### Option 1: Project-level (checked in)
 
-Create `.claude/settings.json` in your project:
+Create `.claude/settings.json` in your project. See [`docs/claude-settings.json.example`](claude-settings.json.example) for the complete example:
 
 ```json
 {
