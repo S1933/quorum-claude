@@ -7,20 +7,21 @@
 
 Provider-agnostic consensus review for AI-assisted code changes.
 
-Quorum runs several AI reviewers on the same git diff, compares their findings, then highlights issues multiple reviewers agree on. It can run as a Bun CLI or as a Claude Code plugin.
+Quorum runs multiple AI reviewers on a git diff and highlights findings they agree on.
+Works as a Bun CLI or Claude Code plugin.
 
 ## Features
 
-- Review the same git diff with multiple AI reviewers and compare their findings
-- Mix hosted APIs, local models, and agent CLIs through one provider-agnostic runtime
-- Define reusable personas, bind them to providers as reviewers, and compose named pipelines
-- Run reviewers in parallel for speed or sequentially for ordered review flows
-- Generate starter configs with `quorum init`, including provider and persona selection
-- Validate YAML config, resolve secrets from environment variables, and redact sensitive config output
-- Group matching findings by file, line range, and category with the `overlap-v1` consensus strategy
-- Tune reviewers with per-reviewer model, temperature, token, and `topP` overrides
-- Render live terminal progress, Markdown reports, or machine-readable JSON for scripts and CI
-- Use Quorum from the CLI or directly inside Claude Code with slash commands
+- Run multiple AI reviewers on the same diff
+- Mix APIs, local models, and agent CLIs
+- Define personas and bind them to providers
+- Run reviewers in parallel or sequentially
+- Generate starter configs with `quorum init`
+- Validate YAML and resolve environment secrets
+- Group findings by file, line, and category
+- Override model, temperature, tokens per reviewer
+- Render progress, Markdown, or JSON reports
+- CLI and Claude Code slash commands
 
 ## Review Workflow
 
@@ -122,7 +123,7 @@ bun quorum review --json
 bun quorum review --format json
 ```
 
-In JSON mode, stdout contains only the JSON document. Pass `--report <path>` to write the same JSON document to a file.
+JSON mode outputs only the JSON to stdout. Use `--report <path>` to write to a file.
 
 ## Claude Code Plugin
 
@@ -154,13 +155,9 @@ Then run `/quorum:quorum-review` or `/quorum:quorum-config` in Claude Code.
 
 V1 ships `overlap-v1`.
 
-Findings are grouped when they share:
-
-- same file path
-- overlapping line range, with a two-line tolerance
-- same category: `security`, `performance`, `architecture`, `correctness`, or `style`
-
-Groups with multiple reviewers get an agreement badge. Single-reviewer findings are still reported separately.
+Findings are grouped when they share the same file, line range (±2 lines), and category.
+Categories: `security`, `performance`, `architecture`, `correctness`, `style`.
+Multiple reviewers get an agreement badge. Single-reviewer findings are reported separately.
 
 Example:
 
@@ -172,14 +169,14 @@ Example:
 
 ## Roadmap
 
-- Harden packaging and installation for the standalone `quorum` binary
-- Add a CI-native review command with predictable exit-code policy and PR annotation support
-- Improve provider diagnostics for missing binaries, bad credentials, malformed model output, and timeouts
-- Add compatibility checks against real Claude Code, OpenCode, Ollama, and OpenRouter versions
-- Semantic deduplication beyond file and line overlap
-- Contradiction detection between reviewers
-- Per-reviewer trust, calibration, and weighted voting
-- External provider plugin loading and a provider-author guide
-- Review history, interactive triage, and a web dashboard
+- Standalone `quorum` binary with improved packaging
+- CI command with exit codes and PR annotations
+- Better diagnostics for missing tools and bad credentials
+- Compatibility checks for Claude Code, OpenCode, Ollama, OpenRouter
+- Semantic deduplication
+- Contradiction detection
+- Per-reviewer trust and weighted voting
+- External provider plugins
+- Review history and web dashboard
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deeper design notes.
