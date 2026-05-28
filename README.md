@@ -78,7 +78,7 @@ defaults:
 providers:
   claude-code-local:
     type: claude-code
-    model: claude-opus-4-7
+    model: claude-opus-4-8
 
 personas:
   security:
