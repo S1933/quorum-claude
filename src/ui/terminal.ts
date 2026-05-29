@@ -43,12 +43,13 @@ export class TerminalRenderer {
 
     unsubs.push(
       bus.on('pipeline.started', (e) => {
-        this.line(`${this.c('cyan', '▶')}  pipeline ${this.c('bold', e.pipelineId)} — ${e.reviewers.length} reviewer(s): ${e.reviewers.join(', ')}`);
+        this.line(`${this.c('cyan', '🧭')}  pipeline ${this.c('bold', e.pipelineId)} · ${e.reviewers.length} reviewer(s)`);
+        this.line(this.c('dim', `    ${e.reviewers.join(', ')}`));
       }),
     );
     unsubs.push(
       bus.on('reviewer.started', (e) => {
-        this.line(`${this.c('dim', '  …')} ${e.reviewerId} started`);
+        this.line(`${this.c('dim', '  ⏳')} ${e.reviewerId} started`);
       }),
     );
     unsubs.push(
@@ -65,12 +66,12 @@ export class TerminalRenderer {
     unsubs.push(
       bus.on('reviewer.finished', (e) => {
         const n = e.result.findings.length;
-        this.line(`${this.c('green', '  ✓')} ${e.reviewerId} finished — ${n} finding${n === 1 ? '' : 's'} ${this.c('dim', `(${e.result.durationMs}ms)`)}`);
+        this.line(`${this.c('green', '  ✅')} ${e.reviewerId} finished · ${n} finding${n === 1 ? '' : 's'} ${this.c('dim', `(${this.formatDuration(e.result.durationMs)})`)}`);
       }),
     );
     unsubs.push(
       bus.on('reviewer.failed', (e) => {
-        this.line(`${this.c('red', '  ✗')} ${e.reviewerId} failed: ${e.error.message}`);
+        this.line(`${this.c('red', '  ❌')} ${e.reviewerId} failed: ${e.error.message}`);
       }),
     );
     unsubs.push(
@@ -81,10 +82,12 @@ export class TerminalRenderer {
     unsubs.push(
       bus.on('pipeline.finished', (e) => {
         this.line('');
-        this.line(this.c('bold', '── Findings by priority ──'));
+        this.renderSummary(e.result.consensus.groups, e.result.consensus.unique, e.result.errors.length);
+        this.line('');
+        this.line(this.c('bold', '── 🔎 Findings by priority ──'));
         this.renderConsensus(e.result.consensus.groups, e.result.consensus.unique);
         this.line('');
-        this.line(this.c('dim', `pipeline ${e.result.pipelineId} done in ${e.result.durationMs}ms (${e.result.reviews.length} reviews, ${e.result.errors.length} errors)`));
+        this.line(this.c('dim', `pipeline ${e.result.pipelineId} done in ${this.formatDuration(e.result.durationMs)} (${e.result.reviews.length} reviews, ${e.result.errors.length} errors)`));
       }),
     );
 
@@ -93,12 +96,28 @@ export class TerminalRenderer {
     };
   }
 
+  private renderSummary(
+    groups: Array<{ id: string; representative: Finding; members: Finding[]; reviewers: string[] }>,
+    unique: Finding[],
+    errors: number,
+  ): void {
+    const allFindings = [...groups.flatMap((g) => g.members), ...unique];
+    const total = allFindings.length;
+    const counts = PRIORITIES
+      .map((priority) => `${this.severityIcon(priority)} ${priority}:${allFindings.filter((f) => f.severity === priority).length}`)
+      .join('  ');
+
+    this.line(this.c('bold', '── 📊 Review summary ──'));
+    this.line(`   ${total} finding${total === 1 ? '' : 's'} · ${groups.length} agreement group${groups.length === 1 ? '' : 's'} · ${unique.length} single-reviewer · ${errors} error${errors === 1 ? '' : 's'}`);
+    this.line(`   ${counts}`);
+  }
+
   private renderConsensus(
     groups: Array<{ id: string; representative: Finding; members: Finding[]; reviewers: string[] }>,
     unique: Finding[],
   ): void {
     if (groups.length === 0 && unique.length === 0) {
-      this.line(this.c('green', '  no findings'));
+      this.line(this.c('green', '  ✅ no findings'));
       return;
     }
 
@@ -110,28 +129,47 @@ export class TerminalRenderer {
       if (priorityGroups.length === 0 && priorityUnique.length === 0) continue;
 
       this.line('');
-      this.line(this.c('bold', `Priority: ${priority}`));
+      this.line(this.c('bold', `${this.severityIcon(priority)} ${this.severityLabel(priority)} (${priorityGroups.length + priorityUnique.length})`));
       for (const g of priorityGroups) {
         const f = g.representative;
-        const badge = this.c('magenta', `[${g.reviewers.length} agreed]`);
+        const badge = this.c('magenta', `🤝 ${g.reviewers.length} agreed`);
         this.line(`${this.severityIcon(f.severity)} ${this.c('bold', f.title)} ${badge} ${this.c('dim', `(${f.file}:${f.lineRange.start}-${f.lineRange.end})`)}`);
         if (f.body) this.line(`   ${f.body.replace(/\n/g, '\n   ')}`);
-        this.line(this.c('dim', `   reviewers: ${g.reviewers.join(', ')}`));
+        this.line(this.c('dim', `   ${this.categoryIcon(f.category)} ${f.category} · reviewers: ${g.reviewers.join(', ')}`));
       }
       for (const f of priorityUnique) {
-        this.line(`${this.severityIcon(f.severity)} ${f.title} ${this.c('dim', `(${f.file}:${f.lineRange.start}, ${f.reviewer})`)}`);
+        this.line(`${this.severityIcon(f.severity)} ${f.title} ${this.c('dim', `(${f.file}:${f.lineRange.start}-${f.lineRange.end}, ${this.categoryIcon(f.category)} ${f.category}, ${f.reviewer})`)}`);
       }
     }
   }
 
   private severityIcon(s: Finding['severity']): string {
     switch (s) {
-      case 'critical': return this.c('red', '⚠');
-      case 'high':     return this.c('red', '●');
-      case 'medium':   return this.c('yellow', '●');
-      case 'low':      return this.c('cyan', '●');
-      case 'info':     return this.c('gray', '·');
+      case 'critical': return this.c('red', '🚨');
+      case 'high':     return this.c('red', '🔥');
+      case 'medium':   return this.c('yellow', '⚠️');
+      case 'low':      return this.c('cyan', '🧊');
+      case 'info':     return this.c('gray', 'ℹ️');
     }
+  }
+
+  private severityLabel(s: Finding['severity']): string {
+    return s[0]!.toUpperCase() + s.slice(1);
+  }
+
+  private categoryIcon(category: Finding['category']): string {
+    switch (category) {
+      case 'security': return '🔐';
+      case 'performance': return '⚡';
+      case 'architecture': return '🏗️';
+      case 'correctness': return '✅';
+      case 'style': return '🎨';
+    }
+  }
+
+  private formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   private renderPreview(reviewerId: string, chunk: string): void {

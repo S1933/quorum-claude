@@ -72,14 +72,16 @@ describe('cli', () => {
     expect(runtime.lastReviewerIds).toEqual(['fake-reviewer']);
     expect(io.stdoutText()).toContain('pipeline default');
     expect(io.stdoutText()).toContain('[fake-reviewer] {"findings"');
-    expect(io.stdoutText()).toContain('── Findings by priority ──');
-    expect(io.stdoutText()).toContain('Priority: medium');
+    expect(io.stdoutText()).toContain('── 📊 Review summary ──');
+    expect(io.stdoutText()).toContain('── 🔎 Findings by priority ──');
+    expect(io.stdoutText()).toContain('⚠️ Medium (1)');
     expect(io.stdoutText()).toContain(`report: ${reportPath}`);
 
     const report = await Bun.file(reportPath).text();
-    expect(report).toContain('# Quorum review — default');
-    expect(report).toContain('## Findings by priority');
-    expect(report).toContain('### Priority: medium');
+    expect(report).toContain('# 🧭 Quorum review — default');
+    expect(report).toContain('## 📊 Summary');
+    expect(report).toContain('## 🔎 Findings by priority');
+    expect(report).toContain('### ⚠️ Medium (1)');
     expect(report).toContain('Fake finding');
   });
 
