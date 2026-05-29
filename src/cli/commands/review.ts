@@ -1,4 +1,4 @@
-import type { QuorumConfig } from '../../config/schema.ts';
+import type { QuorumConfig, ReviewerConfig } from '../../config/schema.ts';
 import { defaultPluginCtx } from '../../runtime/plugin.ts';
 import { applyDiffLimits, type DiffLimits } from '../../runtime/workspace.ts';
 import { PipelineExecutor } from '../../pipelines/executor.ts';
@@ -43,7 +43,17 @@ export async function cmdReview(
   const runtime = await deps.createRuntime({ config, pluginCtx });
 
   const pipeline = runtime.resolvePipeline(pipelineId);
-  const reviewers = await runtime.resolveReviewers(pipeline.reviewers);
+  const reviewerIds = filterReviewersByChangedFiles(pipeline.reviewers, config.reviewers, workspace.files ?? []);
+  if (reviewerIds.length === 0) {
+    io.stderr.write('No reviewers matched the changed file extensions — nothing to review.\n');
+    await runtime.dispose();
+    return 0;
+  }
+  const filteredPipeline =
+    reviewerIds.length === pipeline.reviewers.length
+      ? pipeline
+      : { ...pipeline, reviewers: reviewerIds };
+  const reviewers = await runtime.resolveReviewers(reviewerIds);
 
   const detach =
     format === 'text'
@@ -59,7 +69,7 @@ export async function cmdReview(
 
   try {
     const result = await executor.run({
-      pipeline,
+      pipeline: filteredPipeline,
       reviewers,
       workspace,
       instruction,
@@ -147,6 +157,31 @@ export function buildReviewInstruction(diff: string, files: string[]): string {
     diff,
     fence,
   ].join('\n');
+}
+
+export function filterReviewersByChangedFiles(
+  reviewerIds: string[],
+  reviewers: Record<string, ReviewerConfig>,
+  files: string[],
+): string[] {
+  if (files.length === 0) return reviewerIds;
+  return reviewerIds.filter((id) => {
+    const extensions = reviewers[id]?.fileExtensions;
+    if (!extensions?.length) return true;
+    return files.some((file) => extensions.some((extension) => fileExtensionMatches(file, extension)));
+  });
+}
+
+function fileExtensionMatches(file: string, configured: string): boolean {
+  const extension = normaliseExtension(configured);
+  if (!extension) return false;
+  return file.toLowerCase().endsWith(extension);
+}
+
+function normaliseExtension(extension: string): string {
+  const trimmed = extension.trim().toLowerCase();
+  if (!trimmed) return '';
+  return trimmed.startsWith('.') ? trimmed : `.${trimmed}`;
 }
 
 function reviewOutputFormat(flags: Record<string, string | boolean>): 'text' | 'json' {

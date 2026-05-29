@@ -112,14 +112,17 @@ reviewers:
   backend-claude-local:
     persona: backend-senior
     provider: claude-code-local
+    fileExtensions: [go]
 
   frontend-claude-local:
     persona: frontend-senior
     provider: claude-code-local
+    fileExtensions: [ts, tsx]
 
   arch-claude-local:
     persona: architecture
     provider: claude-code-local
+    fileExtensions: [php, go, ts, tsx]
 
   perf-claude-local:
     persona: performance

@@ -22,6 +22,7 @@ export const ReviewerConfigSchema = z
     persona: NonEmpty,
     provider: NonEmpty,
     overrides: ReviewerOverridesSchema.optional(),
+    fileExtensions: z.array(NonEmpty).optional(),
   })
   .strict();
 

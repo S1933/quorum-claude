@@ -140,11 +140,13 @@ function buildInitConfig(opts: {
   const multiProvider = opts.providers.length > 1;
   const reviewerEntries = opts.personas.flatMap((persona) =>
     opts.providers.map((provider) => {
+      const fileExtensions = defaultPersonaFileExtensions(persona);
       return [
         reviewerId(persona, multiProvider ? provider : undefined),
         {
           persona,
           provider: providerId(provider),
+          ...(fileExtensions ? { fileExtensions } : {}),
         },
       ] as const;
     }),
@@ -179,6 +181,19 @@ function buildInitConfig(opts: {
       },
     },
   };
+}
+
+function defaultPersonaFileExtensions(persona: string): string[] | undefined {
+  switch (persona) {
+    case 'backend-senior':
+      return ['go'];
+    case 'frontend-senior':
+      return ['ts', 'tsx'];
+    case 'architecture':
+      return ['php', 'go', 'ts', 'tsx'];
+    default:
+      return undefined;
+  }
 }
 
 function providerConfig(provider: InitProvider, model: string): ProviderInitConfig {

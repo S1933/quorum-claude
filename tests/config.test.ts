@@ -64,6 +64,14 @@ pipelines:
     expect(Object.keys(cfg.pipelines)).toEqual(['default']);
   });
 
+  test('accepts reviewer file extension filters', async () => {
+    const cfg = await loadConfigFromString(MINIMAL_YAML.replace(
+      '    provider: openrouter-claude',
+      '    provider: openrouter-claude\n    fileExtensions: [go, ts, .tsx]',
+    ));
+    expect(cfg.reviewers.sec?.fileExtensions).toEqual(['go', 'ts', '.tsx']);
+  });
+
   test('accepts defaults.pipeline referencing existing pipeline', async () => {
     const cfg = await loadConfigFromString(withDefaults('  pipeline: default'));
     expect(cfg.defaults?.pipeline).toBe('default');

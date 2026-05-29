@@ -10,7 +10,16 @@ import { overlapV1 } from '../src/consensus/overlap-v1.ts';
 import { ConsensusRegistry } from '../src/consensus/registry.ts';
 import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { BoundReviewer } from '../src/reviewers/reviewer.ts';
-import { main, redactConfig, buildReviewInstruction, buildSafeFence, resolveDiffLimits, type CliDeps, type CliIo } from '../src/cli/index.ts';
+import {
+  main,
+  redactConfig,
+  buildReviewInstruction,
+  buildSafeFence,
+  filterReviewersByChangedFiles,
+  resolveDiffLimits,
+  type CliDeps,
+  type CliIo,
+} from '../src/cli/index.ts';
 import { loadConfigFromPath } from '../src/config/loader.ts';
 import { createInitConfig, INIT_PROVIDERS } from '../src/config/init.ts';
 import { InMemoryEventBus } from '../src/runtime/bus.ts';
@@ -186,6 +195,9 @@ describe('cli', () => {
       'arch-reviewer',
       'perf-reviewer',
     ]);
+    expect(cfg.reviewers['backend-reviewer']?.fileExtensions).toEqual(['go']);
+    expect(cfg.reviewers['frontend-reviewer']?.fileExtensions).toEqual(['ts', 'tsx']);
+    expect(cfg.reviewers['arch-reviewer']?.fileExtensions).toEqual(['php', 'go', 'ts', 'tsx']);
     expect(cfg.personas.security?.system.trim()).toBe('Template security prompt.');
   });
 
@@ -813,6 +825,124 @@ describe('review diff limits integration', () => {
   });
 });
 
+describe('reviewer file extension filters', () => {
+  test('keeps unscoped reviewers and reviewers matching changed extensions', () => {
+    const ids = filterReviewersByChangedFiles(
+      ['security', 'backend', 'frontend', 'architecture'],
+      {
+        security: { persona: 'security', provider: 'fake-provider' },
+        backend: { persona: 'backend', provider: 'fake-provider', fileExtensions: ['go'] },
+        frontend: { persona: 'frontend', provider: 'fake-provider', fileExtensions: ['.ts', '.tsx'] },
+        architecture: { persona: 'architecture', provider: 'fake-provider', fileExtensions: ['php', 'go', 'ts'] },
+      },
+      ['cmd/api/main.go', 'README.md'],
+    );
+
+    expect(ids).toEqual(['security', 'backend', 'architecture']);
+  });
+
+  test('keeps all reviewers when changed files are unavailable', () => {
+    const ids = filterReviewersByChangedFiles(
+      ['backend'],
+      {
+        backend: { persona: 'backend', provider: 'fake-provider', fileExtensions: ['go'] },
+      },
+      [],
+    );
+
+    expect(ids).toEqual(['backend']);
+  });
+
+  test('review only resolves matching reviewers before execution', async () => {
+    const io = captureIo();
+    const runtime = fakeRuntime({
+      defaultPipeline: {
+        id: 'default',
+        parallel: true,
+        reviewers: ['backend-reviewer', 'frontend-reviewer', 'arch-reviewer'],
+      },
+    });
+
+    const code = await main(
+      ['review', '--config', '/repo/quorum.yaml', '--json'],
+      deps({
+        loadConfigFromPath: async () => ({
+          ...config(),
+          reviewers: {
+            'backend-reviewer': { persona: 'fake', provider: 'fake-provider', fileExtensions: ['go'] },
+            'frontend-reviewer': { persona: 'fake', provider: 'fake-provider', fileExtensions: ['ts', 'tsx'] },
+            'arch-reviewer': { persona: 'fake', provider: 'fake-provider', fileExtensions: ['php', 'go', 'ts'] },
+          },
+          pipelines: {
+            default: {
+              parallel: true,
+              reviewers: ['backend-reviewer', 'frontend-reviewer', 'arch-reviewer'],
+            },
+          },
+        }),
+        inferRepoRoot: async () => '/repo',
+        probeWorkspace: async () => ({
+          root: '/repo',
+          baseRef: 'main',
+          diff: 'diff --git a/src/main.go b/src/main.go\n+++ b/src/main.go\n@@ -1 +1,2 @@\n+change',
+          files: ['src/main.go'],
+        }),
+        createRuntime: async () => runtime,
+        now: () => 123,
+      }),
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(runtime.lastReviewerIds).toEqual(['backend-reviewer', 'arch-reviewer']);
+    const printed = JSON.parse(io.stdoutText());
+    expect(printed.pipeline.reviewCount).toBe(2);
+  });
+
+  test('review exits without running when no reviewer matches changed extensions', async () => {
+    const io = captureIo();
+    const runtime = fakeRuntime({
+      defaultPipeline: {
+        id: 'default',
+        parallel: true,
+        reviewers: ['backend-reviewer'],
+      },
+    });
+
+    const code = await main(
+      ['review', '--config', '/repo/quorum.yaml'],
+      deps({
+        loadConfigFromPath: async () => ({
+          ...config(),
+          reviewers: {
+            'backend-reviewer': { persona: 'fake', provider: 'fake-provider', fileExtensions: ['go'] },
+          },
+          pipelines: {
+            default: {
+              parallel: true,
+              reviewers: ['backend-reviewer'],
+            },
+          },
+        }),
+        inferRepoRoot: async () => '/repo',
+        probeWorkspace: async () => ({
+          root: '/repo',
+          baseRef: 'main',
+          diff: 'diff --git a/src/app.ts b/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1,2 @@\n+change',
+          files: ['src/app.ts'],
+        }),
+        createRuntime: async () => runtime,
+      }),
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(runtime.lastReviewerIds).toBeUndefined();
+    expect(runtime.disposed).toBe(true);
+    expect(io.stderrText()).toContain('No reviewers matched');
+  });
+});
+
 function configWith(defaultsOverrides: Record<string, unknown>): QuorumConfig {
   return {
     ...config(),
@@ -892,7 +1022,7 @@ function personaTemplates(): Record<string, { description: string; system: strin
   };
 }
 
-function fakeRuntime(): FakeRuntime {
+function fakeRuntime(opts: { defaultPipeline?: Pipeline } = {}): FakeRuntime {
   const consensus = new ConsensusRegistry();
   consensus.register(overlapV1);
   const runtime: FakeRuntime = {
@@ -912,11 +1042,11 @@ function fakeRuntime(): FakeRuntime {
     },
     async resolveReviewers(ids: string[]) {
       runtime.lastReviewerIds = ids;
-      return [reviewer('fake-reviewer')];
+      return ids.map((id) => reviewer(id));
     },
     resolvePipeline(id: string): Pipeline {
       runtime.lastPipelineId = id;
-      return { id, parallel: true, reviewers: ['fake-reviewer'] };
+      return opts.defaultPipeline ?? { id, parallel: true, reviewers: ['fake-reviewer'] };
     },
     async dispose() {
       runtime.disposed = true;

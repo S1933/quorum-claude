@@ -101,6 +101,27 @@ pipelines:
 
 For the ready-to-copy starter config, see [`quorum.yaml.example`](quorum.yaml.example).
 
+Set `fileExtensions` on a reviewer to run it only when at least one changed file matches.
+Reviewers without `fileExtensions` always run.
+
+```yaml
+reviewers:
+  backend-claude-local:
+    persona: backend-senior
+    provider: claude-code-local
+    fileExtensions: [go]
+
+  frontend-claude-local:
+    persona: frontend-senior
+    provider: claude-code-local
+    fileExtensions: [ts, tsx]
+
+  arch-claude-local:
+    persona: architecture
+    provider: claude-code-local
+    fileExtensions: [php, go, ts, tsx]
+```
+
 Available personas in the example config:
 
 | Persona | Description |

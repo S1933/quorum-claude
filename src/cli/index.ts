@@ -13,7 +13,12 @@ import type { CliDeps, CliIo } from './types.ts';
 
 export type { CliDeps, CliIo } from './types.ts';
 export { redactConfig } from './commands/config.ts';
-export { buildSafeFence, buildReviewInstruction, resolveDiffLimits } from './commands/review.ts';
+export {
+  buildSafeFence,
+  buildReviewInstruction,
+  filterReviewersByChangedFiles,
+  resolveDiffLimits,
+} from './commands/review.ts';
 
 const defaultIo: CliIo = {
   stdout: process.stdout,
