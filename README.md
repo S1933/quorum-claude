@@ -43,7 +43,7 @@ git clone https://github.com/S1933/quorum.git
 cd quorum
 bun install
 
-# Add your first reviewer
+# Add your first reviewer (run this in your project directory)
 bun quorum reviewer add --provider=openrouter --persona=security --model=claude-opus-4
 ```
 
