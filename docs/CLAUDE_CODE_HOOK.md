@@ -4,7 +4,7 @@ Auto-run Quorum review before commits using a Claude Code hook.
 
 ## Setup
 
-Add this hook to your Claude Code settings to automatically run Quorum review before each commit. The hook will block commits that contain `high` or `critical` severity findings.
+Add this hook to your Claude Code settings. The hook uses the shared check script at `scripts/quorum-hook-check.sh`.
 
 ### Option 1: Project-level (checked in)
 
@@ -50,8 +50,6 @@ The hook will:
 ```bash
 QUORUM_BYPASS=1 git commit -m "your message"
 ```
-
-This allows you to commit even if high/critical findings are present.
 
 ## How it works
 
