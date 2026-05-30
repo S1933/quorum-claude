@@ -181,7 +181,7 @@ pipelines:
     await expect(loadConfigFromString(source)).rejects.toThrow(ConfigError);
   });
 
-  test('rejects empty reviewers array in pipeline', async () => {
+  test('accepts empty reviewers array in pipeline', async () => {
     const source = `
 version: 1
 providers:
@@ -193,7 +193,8 @@ reviewers:
 pipelines:
   default: { reviewers: [] }
 `;
-    await expect(loadConfigFromString(source)).rejects.toThrow(ConfigError);
+    const cfg = await loadConfigFromString(source);
+    expect(cfg.pipelines.default!.reviewers).toEqual([]);
   });
 
   test('accepts pipeline with maxConcurrency', async () => {
