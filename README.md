@@ -19,15 +19,58 @@ Works as a Bun CLI or Claude Code plugin.
 
 ## Review Workflow
 
-```text
-+---------+     +--------+     +----------+     +-----------+
-| changes | --> | config | --> | pipeline | --> | reviewers |
-+---------+     +--------+     +----------+     +-----------+
-                                                   |
-                                                   v
-+--------+     +-----------+     +----------+
-| report | <-- | consensus | <-- | findings |
-+--------+     +-----------+     +----------+
+```mermaid
+flowchart LR
+    changes["Changes<br/><small>Git diff / Pull Request</small>"]
+    config["Config<br/><small>quorum.yaml</small>"]
+
+    subgraph providers["Providers / Brains"]
+        gpt["GPT-5.5"]
+        opus["Claude Opus 4.5"]
+        gemini["Gemini Pro"]
+        deepseek["DeepSeek"]
+    end
+
+    subgraph personas["Personas / Review Lens"]
+        security["security<br/><small>Adversarial security review</small>"]
+        backend["backend-senior<br/><small>Senior backend engineering review</small>"]
+        frontend["frontend-senior<br/><small>Senior frontend engineering review</small>"]
+        architecture["architecture<br/><small>Architecture and maintainability review</small>"]
+        performance["performance<br/><small>Performance and scalability review</small>"]
+    end
+
+    subgraph reviewers["Reviewers / AI Agents"]
+        r1["Security Reviewer<br/><small>Provider + security persona</small>"]
+        r2["Backend Reviewer<br/><small>Provider + backend-senior persona</small>"]
+        r3["Frontend Reviewer<br/><small>Provider + frontend-senior persona</small>"]
+        r4["Architecture Reviewer<br/><small>Provider + architecture persona</small>"]
+        r5["Performance Reviewer<br/><small>Provider + performance persona</small>"]
+    end
+
+    pipeline["Pipeline<br/><small>Review meeting orchestration</small>"]
+    findings["Findings<br/><small>Structured review results</small>"]
+    consensus["Consensus<br/><small>Compare overlaps and agreement</small>"]
+    report["Report<br/><small>Markdown / JSON output</small>"]
+
+    changes --> config
+    config --> providers
+    config --> personas
+
+    providers --> reviewers
+    personas --> reviewers
+
+    reviewers --> pipeline
+    pipeline --> findings
+    findings --> consensus
+    consensus --> report
+
+    classDef main fill:#f7f3ff,stroke:#6d28d9,stroke-width:1.5px,color:#111827;
+    classDef group fill:#ffffff,stroke:#c4b5fd,stroke-width:1px,color:#111827;
+    classDef output fill:#ecfdf5,stroke:#16a34a,stroke-width:1.5px,color:#111827;
+
+    class changes,config,pipeline,findings,consensus main;
+    class report output;
+    class gpt,opus,gemini,deepseek,security,backend,frontend,architecture,performance,r1,r2,r3,r4,r5 group;
 ```
 
 ## Supported Providers
