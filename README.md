@@ -53,12 +53,6 @@ bun quorum reviewer add --provider=openrouter --persona=security --model=claude-
 # Review current changes against the default branch
 bun quorum review
 
-# Run a named pipeline
-bun quorum review consensus-security
-
-# Same, explicit flag
-bun quorum review --pipeline consensus-security
-
 # Add a reviewer to your config
 bun quorum reviewer add --provider=openrouter --persona=security --model=claude-opus-4
 
