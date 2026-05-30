@@ -17,22 +17,6 @@ Works as a Bun CLI or Claude Code plugin.
 - YAML-defined personas, reviewer overrides, file filters, and parallel or sequential pipelines.
 - Terminal progress plus Markdown/JSON reports, available from the CLI or Claude Code slash commands.
 
-## Review Workflow
-
-```mermaid
-flowchart LR
-    diff["Git diff / PR"]
-    config["quorum.yaml"]
-    reviewers["AI reviewers<br/><small>provider + persona</small>"]
-    consensus["Consensus<br/><small>dedupe + agreement</small>"]
-    report["Report<br/><small>terminal / Markdown / JSON</small>"]
-
-    diff --> reviewers
-    config --> reviewers
-    reviewers --> consensus
-    consensus --> report
-```
-
 ## Supported Providers
 
 | Status | Provider | Type |
