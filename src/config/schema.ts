@@ -36,7 +36,7 @@ export const ConsensusConfigSchema = z
 export const PipelineConfigSchema = z
   .object({
     parallel: z.boolean().default(true),
-    reviewers: z.array(NonEmpty).min(1),
+    reviewers: z.array(NonEmpty).min(0),
     consensus: ConsensusConfigSchema.optional(),
     timeoutMs: z.number().int().positive().optional(),
     maxConcurrency: z.number().int().positive().optional(),

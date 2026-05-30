@@ -22,4 +22,7 @@ export interface CliDeps {
   probeWorkspace(opts: { root: string; baseRef?: string }): Promise<WorkspaceInfo>;
   createRuntime(opts: Parameters<typeof createRuntimeDefault>[0]): Promise<Runtime>;
   now(): number;
+  initConfigIfMissing?(configPath: string, examplePath: string): Promise<boolean>;
+  readConfigFile?(configPath: string): Promise<string>;
+  writeConfigFile?(configPath: string, content: string): Promise<void>;
 }

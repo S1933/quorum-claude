@@ -3,14 +3,7 @@ version: 1
 defaults:
   pipeline: default
 
-providers:
-  claude-code-local:
-    type: claude-code
-    model: claude-opus-4-7
-
-  cursor-agent-local:
-    type: cursor-agent
-    model: claude-opus-4-7
+providers: {}
 
 personas:
   security:
@@ -104,32 +97,10 @@ personas:
       name the hot path, explain the expected cost or failure mode, and suggest a
       practical measurement or fix. Cite file and line references whenever possible.
 
-reviewers:
-  sec-claude-local:
-    persona: security
-    provider: claude-code-local
-
-  backend-claude-local:
-    persona: backend-senior
-    provider: claude-code-local
-    fileExtensions: [go]
-
-  frontend-claude-local:
-    persona: frontend-senior
-    provider: claude-code-local
-    fileExtensions: [ts, tsx]
-
-  arch-claude-local:
-    persona: architecture
-    provider: claude-code-local
-    fileExtensions: [php, go, ts, tsx]
-
-  perf-claude-local:
-    persona: performance
-    provider: claude-code-local
+reviewers: {}
 
 pipelines:
   default:
     parallel: true
-    reviewers: [sec-claude-local, backend-claude-local, frontend-claude-local, arch-claude-local, perf-claude-local]
+    reviewers: []
     consensus: { strategy: overlap-v1 }

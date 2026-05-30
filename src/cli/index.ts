@@ -6,6 +6,8 @@ import { QuorumError } from '../core/errors.ts';
 import { parseArgs } from './args.ts';
 import { cmdReview } from './commands/review.ts';
 import { cmdConfig } from './commands/config.ts';
+import { cmdInstallSkills } from './commands/setup.ts';
+import { cmdReviewer } from './commands/reviewer.ts';
 import type { CliDeps, CliIo } from './types.ts';
 
 export type { CliDeps, CliIo } from './types.ts';
@@ -29,6 +31,13 @@ const defaultDeps: CliDeps = {
   probeWorkspace,
   createRuntime: createRuntimeDefault,
   now: Date.now,
+  initConfigIfMissing: async (configPath, examplePath) => {
+    if (await Bun.file(configPath).exists()) return false;
+    await Bun.write(configPath, await Bun.file(examplePath).text());
+    return true;
+  },
+  readConfigFile: async (configPath) => await Bun.file(configPath).text(),
+  writeConfigFile: async (configPath, content) => await Bun.write(configPath, content),
 };
 
 function printHelp(io: CliIo): void {
@@ -37,6 +46,7 @@ function printHelp(io: CliIo): void {
 Usage:
   quorum review [pipeline-id] [--pipeline <id>] [--base <ref>] [--config <path>] [--report <path>] [--format text|json] [--json] [--no-color] [--no-preview] [--max-diff-bytes <n>] [--include <glob>] [--exclude <glob>]
   quorum config [--config <path>]
+  quorum install-skills
   quorum help
 
 Defaults are read from quorum.yaml in the working directory.
@@ -61,6 +71,10 @@ export async function main(
         return await cmdReview(positional, flags, deps, io);
       case 'config':
         return await cmdConfig(flags, deps, io);
+      case 'install-skills':
+        return await cmdInstallSkills(positional, flags, deps, io);
+      case 'reviewer':
+        return await cmdReviewer(positional, flags, deps, io);
       default:
         io.stderr.write(`Unknown command: ${command}\n\n`);
         printHelp(io);
