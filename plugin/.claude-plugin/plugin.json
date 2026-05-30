@@ -1,8 +1,0 @@
-{
-  "name": "quorum",
-  "version": "0.1.0",
-  "description": "Multi-model consensus reviewer pipelines for Claude Code",
-  "author": {
-    "name": "Quorum"
-  }
-}
