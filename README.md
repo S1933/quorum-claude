@@ -127,6 +127,18 @@ bun quorum review consensus-security
 # Same, explicit flag
 bun quorum review --pipeline consensus-security
 
+# Add a reviewer to your config
+bun quorum reviewer add --provider=openrouter --persona=security --model=claude-opus-4
+
+# Add with file filter and custom id
+bun quorum reviewer add --provider=claude-code --persona=backend-senior --ext=go --id=backend-go-reviewer --pipeline=default
+
+# List all reviewers, providers, personas, and pipelines
+bun quorum reviewers
+
+# Install Quorum skill symlinks for AI agents
+bun quorum setup
+
 # Print loaded config with secrets redacted
 bun quorum config
 
