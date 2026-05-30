@@ -28,7 +28,7 @@ Scope: local files in `/Users/jp/Projects/quorum-claude` only
   - `tests`: Bun unit/integration tests.
 - Entry points:
   - CLI binary: `src/cli/index.ts:1`
-  - CLI commands: `src/cli/commands/config.ts`, `review.ts`, `reviewer.ts`, `reviewers.ts`, `setup.ts`
+  - CLI commands: `src/cli/commands/review.ts`, `reviewer.ts`, `reviewers.ts`, `install-skills.ts`
   - Package exports: `src/index.ts:1`
   - Runtime factory: `src/runtime/runtime.ts:42`
   - Pipeline executor: `src/pipelines/executor.ts:19`

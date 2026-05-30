@@ -12,7 +12,6 @@ import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { BoundReviewer } from '../src/reviewers/reviewer.ts';
 import {
   main,
-  redactConfig,
   buildReviewInstruction,
   buildSafeFence,
   filterReviewersByChangedFiles,
@@ -20,6 +19,7 @@ import {
   type CliDeps,
   type CliIo,
 } from '../src/cli/index.ts';
+import { redactConfig } from '../src/config/redact.ts';
 import { InMemoryEventBus } from '../src/runtime/bus.ts';
 import type { Runtime } from '../src/runtime/runtime.ts';
 

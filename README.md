@@ -5,19 +5,18 @@
 [![CI](https://github.com/S1933/quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/S1933/quorum/actions/workflows/ci.yml)
 [![Bun](https://img.shields.io/badge/runtime-Bun-000?logo=bun&logoColor=white)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-plugin-6b46c1)](#claude-code-plugin)
 
 Provider-agnostic consensus review for AI-assisted code changes.
 
 Quorum runs multiple AI reviewers on a git diff and highlights findings they agree on.
-Works as a Bun CLI or Claude Code plugin.
+Works as a Bun CLI.
 
 ## Features
 
 - Multi-reviewer consensus on the same git diff, with findings grouped by file, line, and category.
 - Provider-agnostic execution across APIs, local models, and agent CLIs.
 - YAML-defined personas, reviewer overrides, file filters, and parallel or sequential pipelines.
-- Terminal progress plus Markdown/JSON reports, available from the CLI or Claude Code slash commands.
+- Terminal progress plus Markdown/JSON reports, available from the CLI.
 
 ## Supported Providers
 
@@ -137,10 +136,7 @@ bun quorum reviewer add --provider=claude-code --persona=backend-senior --ext=go
 bun quorum reviewers
 
 # Install Quorum skill symlinks for AI agents
-bun quorum setup
-
-# Print loaded config with secrets redacted
-bun quorum config
+bun quorum install-skills
 
 # Print a clean JSON review report to stdout
 bun quorum review --json
@@ -150,45 +146,6 @@ bun quorum review --format json
 ```
 
 JSON mode outputs only the JSON to stdout. Use `--report <path>` to write to a file.
-
-## Claude Code Plugin
-
-Install from the Claude Code plugin marketplace:
-
-```bash
-claude plugin marketplace add S1933/quorum
-claude plugin install quorum@quorum-plugins
-```
-
-Available slash commands:
-
-| Command | Purpose |
-|---|---|
-| `/quorum-review` | Run the default review pipeline on the current diff |
-| `/quorum-review <pipeline>` | Run a named pipeline |
-| `/quorum-config` | Show loaded config with secrets redacted |
-
-For local plugin development:
-
-```bash
-claude --plugin-dir ./plugin
-```
-
-Then run `/quorum:quorum-review` or `/quorum:quorum-config` in Claude Code.
-
-### Claude Code Hook
-
-Auto-run Quorum review before commits. See [docs/CLAUDE_CODE_HOOK.md](docs/CLAUDE_CODE_HOOK.md) for setup instructions.
-
-Blocks commits with `high` or `critical` severity findings:
-
-```bash
-# Normal commit (runs Quorum check)
-git commit -m "message"
-
-# Bypass the check
-QUORUM_BYPASS=1 git commit -m "message"
-```
 
 ## Consensus
 
